@@ -29,6 +29,8 @@
 *.app
 
 *.db
-VirtualWhiteboard\VirtualWhiteboard\Debug
 *.ilk
 *.pdb
+VirtualWhiteboard/VirtualWhiteboard/Debug/
+*.suo
+*.opendb
