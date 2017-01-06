@@ -57,6 +57,7 @@ int main(int argc, char** argv)
 		Mat imgOriginal;
 
 		bool bSuccess = cap.read(imgOriginal); // read a new frame from video
+		cv::flip(imgOriginal, imgOriginal, 1);
 
 
 
@@ -99,7 +100,14 @@ int main(int argc, char** argv)
 			if (iLastX >= 0 && iLastY >= 0 && posX >= 0 && posY >= 0)
 			{
 				//Draw a red line from the previous point to the current point
-				line(imgLines, Point(posX, posY), Point(iLastX, iLastY), Scalar(0, 0, 255), 2);
+				if (posX > 550 && posY > 350) {
+					line(imgLines, Point(posX, posY), Point(iLastX, iLastY), Scalar(0, 255, 255, 150), 3);
+				}
+				else
+				{
+					line(imgLines, Point(posX, posY), Point(iLastX, iLastY), Scalar(0, 0, 255), 2);
+				}
+				std::cout << posX << " - " << posY << std::endl;
 			}
 
 			iLastX = posX;
