@@ -41,8 +41,11 @@ int main(int argc, char** argv)
 	createTrackbar("LowV", "Control", &iLowV, 255);//Value (0 - 255)
 	createTrackbar("HighV", "Control", &iHighV, 255);
 
-	int iLastX = -1;
-	int iLastY = -1;
+	int iLastX = 0;
+	int iLastY = 0;
+	int tmpiLastX = -1;
+	int tmpiLastY = -1;
+	RNG rng(12345);
 
 	//Capture a temporary image from the camera
 	Mat imgTmp;
@@ -83,6 +86,33 @@ int main(int argc, char** argv)
 		dilate(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 		erode(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 
+		vector<vector<Point> > contours;
+		vector<Vec4i> hierarchy;
+		//findContours(imgThresholded, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
+		/*Mat drawing = Mat::zeros(imgThresholded.size(), CV_8UC3);
+		for (int i = 0; i< contours.size(); i++)
+		{
+			Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
+			drawContours(drawing, contours, i, color, 2, 8, hierarchy, 0, Point());
+		}*/
+		/*
+		        #Find contours in the threshold image
+        contours,hierarchy = cv2.findContours(thresh,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
+
+		
+        #Finding contour with maximum area and store it as best_cnt
+        max_area =0for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area > max_area:
+                max_area = area
+                best_cnt = cnt
+
+        #Finding centroids of best_cnt and draw a circle there
+        M = cv2.moments(best_cnt)
+        cx,cy =int(M['m10']/M['m00']), int(M['m01']/M['m00'])
+        cv2.circle(frame,(cx,cy),10,255,-1)*/
+
+
 		//Calculate the moments of the thresholded image
 		Moments oMoments = moments(imgThresholded);
 
@@ -97,7 +127,8 @@ int main(int argc, char** argv)
 			int posX = dM10 / dArea;
 			int posY = dM01 / dArea;
 
-			if (iLastX >= 0 && iLastY >= 0 && posX >= 0 && posY >= 0)
+			//cout << (posX - iLastX)*(posX - iLastX) << endl;
+			if (iLastX >= 0 && iLastY >= 0 && posX >= 0 && posY >= 0 && (posX - iLastX)*(posX - iLastX) > 10 && (posY - iLastY)*(posY - iLastY) > 10)
 			{
 				//Draw a red line from the previous point to the current point
 				if (posX > 550 && posY > 350) {
@@ -108,13 +139,18 @@ int main(int argc, char** argv)
 					line(imgLines, Point(posX, posY), Point(iLastX, iLastY), Scalar(0, 0, 255), 2);
 				}
 				std::cout << posX << " - " << posY << std::endl;
+
+
+				iLastX = posX;
+				iLastY = posY;
 			}
 
-			iLastX = posX;
-			iLastY = posY;
 		}
 
 		imshow("Thresholded Image", imgThresholded); //show the thresholded image
+
+		//font = cv2.FONT_HERSHEY_SIMPLEX
+		//cv2.putText(img, 'OpenCV', (10, 500), font, 4, (255, 255, 255), 2, cv2.LINE_AA)
 
 		imgOriginal = imgOriginal + imgLines;
 		imshow("Original", imgOriginal); //show the original image
