@@ -38,3 +38,4 @@ VirtualWhiteboard/Debug/
 *.suo
 *.opendb
 VirtualWhiteboard/VirtualWhiteboard/x64/
+VirtualWhiteboard/VirtualWhiteboard/VirtualWhiteboard.vcxproj
