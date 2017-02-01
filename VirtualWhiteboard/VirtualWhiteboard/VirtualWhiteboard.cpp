@@ -23,9 +23,9 @@
 using namespace cv;
 using namespace std;
 
-int _______main(int argc, char** argv)
+int __main(int argc, char** argv)
 {
-	VideoCapture cap(0); //capture the video from webcam
+	VideoCapture cap(1); //capture the video from webcam
 
 	if (!cap.isOpened())  // if not success, exit program
 	{
@@ -182,7 +182,7 @@ int _______main(int argc, char** argv)
 int main(int argc, char* argv[])
 {
 	// Default capture size - 640x480
-	CvSize size = cvSize(640, 480);
+	//CvSize size = cvSize(640, 480);
 	// Open capture device. 0 is /dev/video0, 1 is /dev/video1, etc.
 	/*CvCapture* capture = cvCaptureFromCAM(0);
 	if (!capture)
@@ -191,20 +191,23 @@ int main(int argc, char* argv[])
 	getchar();
 	return -1;
 	}*/
-	VideoCapture cap(0); //capture the video from webcam
+	VideoCapture cap(1); //capture the video from webcam
 
 	if (!cap.isOpened())  // if not success, exit program
 	{
 		cout << "Cannot open the web cam" << endl;
 		return -1;
 	}
+	cap.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
+	cap.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
+
 	// Create a window in which the captured images will be presented
 	cvNamedWindow("Camera", CV_WINDOW_AUTOSIZE);
 	cvNamedWindow("HSV", CV_WINDOW_AUTOSIZE);
 	cvNamedWindow("EdgeDetection", CV_WINDOW_AUTOSIZE);
 	// Detect a red ball
 	int iLowH = 0;
-	int iHighH = 30;
+	int iHighH = 10;
 	//Scalar hsv_min = Scalar(150, 84, 130, 0);
 	//Scalar hsv_max = Scalar(358, 256, 255, 0);
 	Scalar hsv_min;
@@ -222,6 +225,7 @@ int main(int argc, char* argv[])
 	bool alreadyClicked = false;
 	bool alreadyChangedColor = false;
 	RNG rng(12345);
+	Point tmpPt;
 
 	int timeNoDetection = 0;
 	int currentTimeNoDetection = 0;
@@ -246,8 +250,13 @@ int main(int argc, char* argv[])
 		// Covert color space to HSV as it is much easier to filter colors in the HSV color-space.
 		cvtColor(frame, hsv_frame, CV_BGR2HSV);
 		// Filter out colors which are out of range.
+		//Orange
 		inRange(hsv_frame, Scalar(0, 100, 100, 0), Scalar(10, 255, 255, 0), thresholded);
 		inRange(hsv_frame, Scalar(170, 100, 100, 0), Scalar(180, 255, 255, 0), thresholded2);
+		//Blue
+		//inRange(hsv_frame, Scalar(60, 40, 40, 0), Scalar(100, 200, 200, 0), thresholded);
+		//inRange(hsv_frame, Scalar(60, 40, 40, 0), Scalar(100, 255, 100, 0), thresholded2);
+		//inRange(hsv_frame, Scalar(110, 100, 100, 0), Scalar(120, 200, 200, 0), thresholded2);//100 255
 		addWeighted(thresholded, 1.0, thresholded2, 1.0, 0.0, thresholdedFinal);
 		// Memory for hough circles
 		vector<Vec3f> storage;
@@ -270,9 +279,12 @@ int main(int argc, char* argv[])
 		minEnclosingCircle(storage, center, radius);*/
 
 		if (storage.size() == 0) {
+			if (currentTimeNoDetection == 0 && pts.size() > 0) {
+				tmpPt = Point(pts[pts.size()].x, pts[pts.size()].y);
+			}
 			currentTimeNoDetection++;
 			cout << currentTimeNoDetection << endl;
-			if (currentTimeNoDetection > 10) {
+			if (currentTimeNoDetection > 15) {
 				detection = false;
 				//currentTimeNoDetection = 0;
 				alreadyClicked = false;
@@ -280,9 +292,9 @@ int main(int argc, char* argv[])
 		}
 		if (storage.size() > 0 && pts.size() > 0)
 		{
-			if (!alreadyClicked && currentTimeNoDetection > 10 && currentTimeNoDetection < 30) {
+			if (!alreadyClicked && currentTimeNoDetection > 15 && currentTimeNoDetection < 30) {
 				cout << " Clic !!!!!!!!!!!!!!!!!!!!" << pts[pts.size()-1].x << pts[pts.size()-1].y << endl;
-				clickedPts.push_back(Point(pts[pts.size()].x, pts[pts.size()].y));
+				clickedPts.push_back(tmpPt);
 				alreadyClicked = true;
 			}
 			currentTimeNoDetection = 0;
@@ -293,15 +305,15 @@ int main(int argc, char* argv[])
 		{
 			Vec3f p = storage[i];
 			//printf("Ball!x = %f y = %f r = %f\n\r", p[0], p[1], p[2]);
+			/*circle(frame, cvPoint(cvRound(p[0]), cvRound(p[1])),
+				3, CV_RGB(0, 255, 0), -1, 8, 0);*/
 			circle(frame, cvPoint(cvRound(p[0]), cvRound(p[1])),
-				3, CV_RGB(0, 255, 0), -1, 8, 0);
-			circle(frame, cvPoint(cvRound(p[0]), cvRound(p[1])),
-				cvRound(p[2]), CV_RGB(255, 0, 0), 3, 8, 0);
+				cvRound(p[2]), CV_RGB(255, 0, 0, 10), 1, 8, 0);
 
 			pt = Point(cvRound(p[0]), cvRound(p[1]));
 
 			//cout << ((pt.x - lastPt.x)) << "  " << sqrt((pt.y - lastPt.y)) << endl;
-			if (cv::pow((pt.x - lastPt.x), 2.0) > 20 && cv::pow((pt.y - lastPt.y), 2.0) > 20) {
+			if (cv::pow((pt.x - lastPt.x), 2.0) > 10 && cv::pow((pt.y - lastPt.y), 2.0) > 10) {
 				lastPt = pt;
 				pts.push_back(pt);
 			}
@@ -358,6 +370,7 @@ int main(int argc, char* argv[])
 	}
 
 	cvDestroyAllWindows();
+	cap.release();
 
 	return 0;
 }
