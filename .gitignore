@@ -32,5 +32,8 @@
 *.ilk
 *.pdb
 VirtualWhiteboard/VirtualWhiteboard/Debug/
+VirtualWhiteboard/VirtualWhiteboard/Release/
+VirtualWhiteboard/Release/
+VirtualWhiteboard/Debug/
 *.suo
 *.opendb

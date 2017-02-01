@@ -151,7 +151,7 @@ int _______main(int argc, char** argv)
 				{
 					line(imgLines, Point(posX, posY), Point(iLastX, iLastY), Scalar(0, 0, 255), 2);
 				}
-				std::cout << posX << " - " << posY << std::endl;
+				//std::cout << posX << " - " << posY << std::endl;
 
 
 				iLastX = posX;
@@ -178,8 +178,6 @@ int _______main(int argc, char** argv)
 	return 0;
 }
 
-
-
 // Ball
 int main(int argc, char* argv[])
 {
@@ -205,12 +203,31 @@ int main(int argc, char* argv[])
 	cvNamedWindow("HSV", CV_WINDOW_AUTOSIZE);
 	cvNamedWindow("EdgeDetection", CV_WINDOW_AUTOSIZE);
 	// Detect a red ball
+	int iLowH = 0;
+	int iHighH = 30;
 	//Scalar hsv_min = Scalar(150, 84, 130, 0);
 	//Scalar hsv_max = Scalar(358, 256, 255, 0);
-	Scalar hsv_min = Scalar(100, 84, 130, 0);
-	Scalar hsv_max = Scalar(179, 255, 255, 0);
+	Scalar hsv_min;
+	Scalar hsv_max;
+	Scalar greenLower = Scalar(29, 86, 6);
+	Scalar greenUpper = Scalar(64, 255, 255);
 	Mat  hsv_frame;
 	Mat  thresholded;
+	Mat  thresholded2;
+	Mat  thresholdedFinal;
+	vector<Point> pts;
+	vector<Point> clickedPts;
+	Point pt, lastPt = Point(0,0);
+	bool detection = false;
+	bool alreadyClicked = false;
+	bool alreadyChangedColor = false;
+	RNG rng(12345);
+
+	int timeNoDetection = 0;
+	int currentTimeNoDetection = 0;
+
+	Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255), 150);
+
 	while (1)
 	{
 		// Get one frame
@@ -222,38 +239,125 @@ int main(int argc, char* argv[])
 			getchar();
 			break;
 		}
+
+		//frame.resize(600);
+		// Pour le grain
+		medianBlur(frame, frame, 3);
 		// Covert color space to HSV as it is much easier to filter colors in the HSV color-space.
 		cvtColor(frame, hsv_frame, CV_BGR2HSV);
 		// Filter out colors which are out of range.
-		inRange(hsv_frame, hsv_min, hsv_max, thresholded);
+		inRange(hsv_frame, Scalar(0, 100, 100, 0), Scalar(10, 255, 255, 0), thresholded);
+		inRange(hsv_frame, Scalar(170, 100, 100, 0), Scalar(180, 255, 255, 0), thresholded2);
+		addWeighted(thresholded, 1.0, thresholded2, 1.0, 0.0, thresholdedFinal);
 		// Memory for hough circles
 		vector<Vec3f> storage;
+		
+
+		erode(thresholdedFinal, thresholdedFinal, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		dilate(thresholdedFinal, thresholdedFinal, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+
+		dilate(thresholdedFinal, thresholdedFinal, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		erode(thresholdedFinal, thresholdedFinal, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 		// hough detector works better with some smoothing of the image
-		GaussianBlur(thresholded, thresholded, Size(0, 0), 3, 3);
-		HoughCircles(thresholded, storage, CV_HOUGH_GRADIENT, 2,
-			thresholded.rows / 4, 200, 100, 10, 400);
+		GaussianBlur(thresholdedFinal, thresholdedFinal, Size(9, 9), 2, 2);
+
+		HoughCircles(thresholdedFinal, storage, CV_HOUGH_GRADIENT, 2, thresholdedFinal.rows / 4, 100, 60, 1, 400);
+		/*Mat result;
+		findContours(thresholded, storage, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+		//max(storage, contourArea(storage));
+		Point2f center;
+		float radius;
+		minEnclosingCircle(storage, center, radius);*/
+
+		if (storage.size() == 0) {
+			currentTimeNoDetection++;
+			cout << currentTimeNoDetection << endl;
+			if (currentTimeNoDetection > 10) {
+				detection = false;
+				//currentTimeNoDetection = 0;
+				alreadyClicked = false;
+			}
+		}
+		if (storage.size() > 0 && pts.size() > 0)
+		{
+			if (!alreadyClicked && currentTimeNoDetection > 10 && currentTimeNoDetection < 30) {
+				cout << " Clic !!!!!!!!!!!!!!!!!!!!" << pts[pts.size()-1].x << pts[pts.size()-1].y << endl;
+				clickedPts.push_back(Point(pts[pts.size()].x, pts[pts.size()].y));
+				alreadyClicked = true;
+			}
+			currentTimeNoDetection = 0;
+			detection = true;
+		}
+
 		for (int i = 0; i < storage.size(); i++)
 		{
 			Vec3f p = storage[i];
-			printf("Ball!x = %f y = %f r = %f\n\r", p[0], p[1], p[2]);
+			//printf("Ball!x = %f y = %f r = %f\n\r", p[0], p[1], p[2]);
 			circle(frame, cvPoint(cvRound(p[0]), cvRound(p[1])),
 				3, CV_RGB(0, 255, 0), -1, 8, 0);
 			circle(frame, cvPoint(cvRound(p[0]), cvRound(p[1])),
 				cvRound(p[2]), CV_RGB(255, 0, 0), 3, 8, 0);
+
+			pt = Point(cvRound(p[0]), cvRound(p[1]));
+
+			//cout << ((pt.x - lastPt.x)) << "  " << sqrt((pt.y - lastPt.y)) << endl;
+			if (cv::pow((pt.x - lastPt.x), 2.0) > 20 && cv::pow((pt.y - lastPt.y), 2.0) > 20) {
+				lastPt = pt;
+				pts.push_back(pt);
+			}
 		}
+		
+		if (pts.size() > 0)
+			if(pts[pts.size()-1].x > 550 && pts[pts.size()-1].y > 350) {
+			if (!alreadyChangedColor) {
+				color = Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255), 150);
+				alreadyChangedColor = true;
+			}
+		}
+		else {
+			alreadyChangedColor = false;
+		}
+
+		for (size_t i = 1; i < pts.size(); i++)
+		{
+			int thichness = int(10/(pts.size()-i)+2);
+
+			line(frame, pts[i - 1], pts[i], color, thichness);
+			if (pts[i].x > 550 && pts[i].y > 350) {
+
+			}
+			else
+			{
+
+
+			}
+		}
+		if (pts.size() > 40) {
+			pts.erase(pts.begin());
+		}
+
+		if(clickedPts.size() > 0 )
+			for (size_t i = 0; i < clickedPts.size()-1; i+=2)
+			{
+				rectangle(frame, Point(cvRound(clickedPts[i].x), cvRound(clickedPts[i].y)), Point(cvRound(clickedPts[i + 1].x), cvRound(clickedPts[i + 1].y)), Scalar(255, 0, 0, 100), 3, 8, 0);
+			}
+
 		imshow("Camera", frame); // Original stream with detected ball overlay
 		imshow("HSV", hsv_frame); // Original stream in the HSV color space
-		imshow("After Color Filtering", thresholded); // The stream after color filtering
+		imshow("After Color Filtering", thresholdedFinal); // The stream after color filtering
+		createTrackbar("LowH", "Camera", &iLowH, 179); //Hue (0 - 179)
+		createTrackbar("HighH", "Camera", &iHighH, 179);
 
-													  //storage.clear();
+		//storage.clear();
 
-													  // Do not release the frame!
-													  //If ESC key pressed, Key=0x10001B under OpenCV 0.9.7(linux version),
-													  //remove higher bits using AND operator
+		// Do not release the frame!
+		//If ESC key pressed, Key=0x10001B under OpenCV 0.9.7(linux version),
+		//remove higher bits using AND operator
+
 		if ((cvWaitKey(10) & 255) == 27) break;
 	}
 
-	destroyAllWindows();
+	cvDestroyAllWindows();
 
 	return 0;
 }
@@ -262,7 +366,7 @@ int main(int argc, char* argv[])
 
 
 // Test avec une image
-int __main(int argc, char** argv)
+int ___main(int argc, char** argv)
 {
 	VideoCapture cap(0); //capture the video from webcam
 
