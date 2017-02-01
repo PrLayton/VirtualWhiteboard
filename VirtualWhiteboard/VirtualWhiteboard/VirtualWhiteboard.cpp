@@ -7,10 +7,23 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 
+#include "opencv2/imgproc/imgproc.hpp"
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/core/core.hpp"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <math.h>
+#include <float.h>
+#include <limits.h>
+#include <time.h>
+#include <ctype.h>
+
 using namespace cv;
 using namespace std;
 
-int main(int argc, char** argv)
+int _______main(int argc, char** argv)
 {
 	VideoCapture cap(0); //capture the video from webcam
 
@@ -92,25 +105,25 @@ int main(int argc, char** argv)
 		/*Mat drawing = Mat::zeros(imgThresholded.size(), CV_8UC3);
 		for (int i = 0; i< contours.size(); i++)
 		{
-			Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
-			drawContours(drawing, contours, i, color, 2, 8, hierarchy, 0, Point());
+		Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
+		drawContours(drawing, contours, i, color, 2, 8, hierarchy, 0, Point());
 		}*/
 		/*
-		        #Find contours in the threshold image
-        contours,hierarchy = cv2.findContours(thresh,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
+		#Find contours in the threshold image
+		contours,hierarchy = cv2.findContours(thresh,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
 
-		
-        #Finding contour with maximum area and store it as best_cnt
-        max_area =0for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if area > max_area:
-                max_area = area
-                best_cnt = cnt
 
-        #Finding centroids of best_cnt and draw a circle there
-        M = cv2.moments(best_cnt)
-        cx,cy =int(M['m10']/M['m00']), int(M['m01']/M['m00'])
-        cv2.circle(frame,(cx,cy),10,255,-1)*/
+		#Finding contour with maximum area and store it as best_cnt
+		max_area =0for cnt in contours:
+		area = cv2.contourArea(cnt)
+		if area > max_area:
+		max_area = area
+		best_cnt = cnt
+
+		#Finding centroids of best_cnt and draw a circle there
+		M = cv2.moments(best_cnt)
+		cx,cy =int(M['m10']/M['m00']), int(M['m01']/M['m00'])
+		cv2.circle(frame,(cx,cy),10,255,-1)*/
 
 
 		//Calculate the moments of the thresholded image
@@ -149,8 +162,8 @@ int main(int argc, char** argv)
 
 		imshow("Thresholded Image", imgThresholded); //show the thresholded image
 
-		//font = cv2.FONT_HERSHEY_SIMPLEX
-		//cv2.putText(img, 'OpenCV', (10, 500), font, 4, (255, 255, 255), 2, cv2.LINE_AA)
+													 //font = cv2.FONT_HERSHEY_SIMPLEX
+													 //cv2.putText(img, 'OpenCV', (10, 500), font, 4, (255, 255, 255), 2, cv2.LINE_AA)
 
 		imgOriginal = imgOriginal + imgLines;
 		imshow("Original", imgOriginal); //show the original image
@@ -165,3 +178,127 @@ int main(int argc, char** argv)
 	return 0;
 }
 
+
+
+// Ball
+int main(int argc, char* argv[])
+{
+	// Default capture size - 640x480
+	CvSize size = cvSize(640, 480);
+	// Open capture device. 0 is /dev/video0, 1 is /dev/video1, etc.
+	/*CvCapture* capture = cvCaptureFromCAM(0);
+	if (!capture)
+	{
+	fprintf(stderr,  "ERROR: capture is NULL \n" );
+	getchar();
+	return -1;
+	}*/
+	VideoCapture cap(0); //capture the video from webcam
+
+	if (!cap.isOpened())  // if not success, exit program
+	{
+		cout << "Cannot open the web cam" << endl;
+		return -1;
+	}
+	// Create a window in which the captured images will be presented
+	cvNamedWindow("Camera", CV_WINDOW_AUTOSIZE);
+	cvNamedWindow("HSV", CV_WINDOW_AUTOSIZE);
+	cvNamedWindow("EdgeDetection", CV_WINDOW_AUTOSIZE);
+	// Detect a red ball
+	//Scalar hsv_min = Scalar(150, 84, 130, 0);
+	//Scalar hsv_max = Scalar(358, 256, 255, 0);
+	Scalar hsv_min = Scalar(100, 84, 130, 0);
+	Scalar hsv_max = Scalar(179, 255, 255, 0);
+	Mat  hsv_frame;
+	Mat  thresholded;
+	while (1)
+	{
+		// Get one frame
+		Mat frame;
+		cap.read(frame);
+		if (frame.empty())
+		{
+			fprintf(stderr, "ERROR: frame is null...\n");
+			getchar();
+			break;
+		}
+		// Covert color space to HSV as it is much easier to filter colors in the HSV color-space.
+		cvtColor(frame, hsv_frame, CV_BGR2HSV);
+		// Filter out colors which are out of range.
+		inRange(hsv_frame, hsv_min, hsv_max, thresholded);
+		// Memory for hough circles
+		vector<Vec3f> storage;
+		// hough detector works better with some smoothing of the image
+		GaussianBlur(thresholded, thresholded, Size(0, 0), 3, 3);
+		HoughCircles(thresholded, storage, CV_HOUGH_GRADIENT, 2,
+			thresholded.rows / 4, 200, 100, 10, 400);
+		for (int i = 0; i < storage.size(); i++)
+		{
+			Vec3f p = storage[i];
+			printf("Ball!x = %f y = %f r = %f\n\r", p[0], p[1], p[2]);
+			circle(frame, cvPoint(cvRound(p[0]), cvRound(p[1])),
+				3, CV_RGB(0, 255, 0), -1, 8, 0);
+			circle(frame, cvPoint(cvRound(p[0]), cvRound(p[1])),
+				cvRound(p[2]), CV_RGB(255, 0, 0), 3, 8, 0);
+		}
+		imshow("Camera", frame); // Original stream with detected ball overlay
+		imshow("HSV", hsv_frame); // Original stream in the HSV color space
+		imshow("After Color Filtering", thresholded); // The stream after color filtering
+
+													  //storage.clear();
+
+													  // Do not release the frame!
+													  //If ESC key pressed, Key=0x10001B under OpenCV 0.9.7(linux version),
+													  //remove higher bits using AND operator
+		if ((cvWaitKey(10) & 255) == 27) break;
+	}
+
+	destroyAllWindows();
+
+	return 0;
+}
+
+
+
+
+// Test avec une image
+int __main(int argc, char** argv)
+{
+	VideoCapture cap(0); //capture the video from webcam
+
+	if (!cap.isOpened())  // if not success, exit program
+	{
+		cout << "Cannot open the web cam" << endl;
+		return -1;
+	}
+	// Get one frame
+	Mat frame;
+
+
+	Mat img, gray;
+	//imwrite("truc", )
+	img = imread("test.JPG");
+
+	//cap.read(img);
+	cvtColor(img, gray, CV_BGR2GRAY);
+	// smooth it, otherwise a lot of false circles may be detected
+	GaussianBlur(gray, gray, Size(9, 9), 2, 2);
+	vector<Vec3f> circles;
+	HoughCircles(gray, circles, CV_HOUGH_GRADIENT,
+		2, gray.rows / 4, 200, 100);
+	for (size_t i = 0; i < circles.size(); i++)
+	{
+		Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
+		int radius = cvRound(circles[i][2]);
+		// draw the circle center
+		circle(img, center, 3, Scalar(0, 255, 0), -1, 8, 0);
+		// draw the circle outline
+		circle(img, center, radius, Scalar(0, 0, 255), 3, 8, 0);
+	}
+	namedWindow("circles", 1);
+	imshow("circles", img);
+
+	cvWaitKey(10000);
+
+	return 0;
+}
