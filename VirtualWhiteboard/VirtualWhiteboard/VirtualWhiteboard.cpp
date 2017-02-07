@@ -1,24 +1,56 @@
 #include "stdafx.h"
+#include "VirtualWhiteboard.h"
 
-#include <iostream>
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/imgproc/imgproc.hpp"
-#include "opencv2/core/core.hpp"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <math.h>
-#include <float.h>
-#include <limits.h>
-#include <time.h>
-#include <ctype.h>
+int main(int argc, char* argv[])
+{
+	//Finger();
+	//Calibration();
+	//DrawScreen();
+	Detection();
+}
 
-using namespace cv;
-using namespace std;
+// Fonction pour détecter l'écran virtuelle - Marqueur est un circle vert
+vector<Point> DetectScreen(Mat image, vector<Point> &lastCenters, double minDist)
+{
+	// Filtrer la couleur VERTE - Marqueur pour l'écran
+	Mat green_hue_image;
+	inRange(image, Scalar(50, 90, 50), Scalar(90, 255, 255), green_hue_image);
+	GaussianBlur(green_hue_image, green_hue_image, Size(9, 9), 2, 2);
+	imshow("GREEN Image", green_hue_image);
+
+	// Stockage des points de reconnaissance
+	vector<Vec3f> circles;
+	HoughCircles(green_hue_image, circles, CV_HOUGH_GRADIENT, 2, green_hue_image.rows / 4, 100, 60, 1, 400);
+
+	vector<Point> centers;
+	// traitement des points détectés
+	for (int i = 0; i < circles.size(); i++)
+	{
+		Vec3f p = circles[i];
+		if (cvRound(p[2]) >= 5)
+			centers.push_back(Point(cvRound(p[0]), cvRound(p[1])));
+	}
+
+	if (centers.size() == 2)
+	{
+		if (lastCenters.size() != 2)
+			lastCenters = centers;
+		else
+		{
+			double dist0 = cv::norm(centers[0] - lastCenters[0]);
+			double dist1 = cv::norm(centers[1] - lastCenters[1]);
+			if (dist0 < minDist && dist1 < minDist)
+				centers = lastCenters;
+			else
+				lastCenters = centers;
+		}
+		return centers;
+	}
+	return lastCenters;
+}
 
 // Projet de détection d'un marqueur (balle de couleur) comme outil de dessin et d'interaction
-int main(int argc, char* argv[])
+int Detection()
 {
 	// Default capture size - 640x480
 	//CvSize size = cvSize(640, 480);
@@ -76,6 +108,8 @@ int main(int argc, char* argv[])
 	int timeNoDetection = 0;
 	int currentTimeNoDetection = 0;
 
+	Mat screen;
+	vector<Point> lastCenters;
 	while (1)
 	{
 		Mat frame;
@@ -86,20 +120,32 @@ int main(int argc, char* argv[])
 			getchar();
 			break;
 		}
-
+		
+		// Flipper l'image
+		flip(frame, frame, 1);
 		// Pour le grain
 		medianBlur(frame, frame, 3);
 		// HSV plus facile à traiter
 		cvtColor(frame, hsv_frame, CV_BGR2HSV);
+
+		vector<Point> centers = DetectScreen(hsv_frame, lastCenters, 200);
+		if (centers.size() == 2)
+		{
+			Rect rec(centers[0], centers[1]);
+			rectangle(frame, rec, CV_RGB(255, 255, 255), CV_FILLED, 8, 0);
+			screen = frame(rec).clone();
+		}
+
+		inRange(hsv_frame, Scalar(100, 100, 90), Scalar(130, 255, 255), thresholdedFinal);
 		//Orange
-		inRange(hsv_frame, Scalar(0, 100, 100, 0), Scalar(10, 255, 255, 0), thresholded);
-		inRange(hsv_frame, Scalar(170, 100, 100, 0), Scalar(180, 255, 255, 0), thresholded2);
+		//inRange(hsv_frame, Scalar(0, 100, 100, 0), Scalar(10, 255, 255, 0), thresholded);
+		//inRange(hsv_frame, Scalar(160, 100, 100, 0), Scalar(180, 255, 255, 0), thresholded2);
 		//Blue
 		//inRange(hsv_frame, Scalar(60, 40, 40, 0), Scalar(100, 200, 200, 0), thresholded);
 		//inRange(hsv_frame, Scalar(60, 40, 40, 0), Scalar(100, 255, 100, 0), thresholded2);
 		//inRange(hsv_frame, Scalar(110, 100, 100, 0), Scalar(120, 200, 200, 0), thresholded2);//100 255
 		// Fusion avec poids
-		addWeighted(thresholded, 1.0, thresholded2, 1.0, 0.0, thresholdedFinal);
+		//addWeighted(thresholded, 1.0, thresholded2, 1.0, 0.0, thresholdedFinal);
 
 		// Amélioration de la qualité du résultat
 		erode(thresholdedFinal, thresholdedFinal, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
@@ -161,7 +207,7 @@ int main(int argc, char* argv[])
 
 			//cout << ((pt.x - lastPt.x)) << "  " << sqrt((pt.y - lastPt.y)) << endl;
 			// Pour éviter les tremblements
-			if (cv::pow((pt.x - lastPt.x), 2.0) > 10 && cv::pow((pt.y - lastPt.y), 2.0) > 10) {
+			if (pow((pt.x - lastPt.x), 2.0) > 10 && pow((pt.y - lastPt.y), 2.0) > 10) {
 				lastPt = pt;
 				// Stockage des points
 				pts.push_back(pt);
@@ -184,7 +230,7 @@ int main(int argc, char* argv[])
 		for (size_t i = 1; i < pts.size(); i++)
 		{
 			int thichness = int(10/(pts.size()-i)+2);
-			line(frame, pts[i - 1], pts[i], color, thichness);
+			line(screen, pts[i - 1], pts[i], color, thichness);
 		}
 		if (pts.size() > 30) {
 			pts.erase(pts.begin());
@@ -199,8 +245,16 @@ int main(int argc, char* argv[])
 		// Affichage des résultats
 		//imshow("HSV", hsv_frame); 
 		imshow("After Color Filtering", thresholdedFinal);
+		if (screen.size().width > 0 && screen.size().height > 0)
+		{
+			cvNamedWindow("ECRAN VIRTUELLE", CV_WINDOW_AUTOSIZE);
+			//cvSetWindowProperty("ECRAN VIRTUELLE", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
+			imshow("ECRAN VIRTUELLE", screen);
+
+			//imshow("ECRAN VIRTUELLE", screen);
+		}
 		imshow("Camera", frame);
-		cv::moveWindow("Camera", 10, 10);
+		moveWindow("Camera", 10, 10);
 		//createTrackbar("LowH", "Camera", &iLowH, 179); //Hue (0 - 179)
 		//createTrackbar("HighH", "Camera", &iHighH, 179);
 
@@ -215,13 +269,140 @@ int main(int argc, char* argv[])
 	return 0;
 }
 
-
-/////////////// Projet de calibration des couleurs
-int __main(int argc, char** argv)
+// Fonction pour dessiner l'écran
+int DrawScreen()
 {
 	VideoCapture cap(0);
 
-	if (!cap.isOpened()) 
+	if (!cap.isOpened())
+	{
+		cout << "Cannot open the web cam" << endl;
+		return -1;
+	}
+
+	namedWindow("Control", CV_WINDOW_AUTOSIZE);
+
+	int iLowH = 0;
+	int iHighH = 179;
+
+	int iLowS = 50;
+	int iHighS = 255;
+
+	int iLowV = 50;
+	int iHighV = 255;
+
+	// Hue
+	createTrackbar("LowH", "Control", &iLowH, 179);
+	createTrackbar("HighH", "Control", &iHighH, 179);
+
+	// Saturation
+	createTrackbar("LowS", "Control", &iLowS, 255);
+	createTrackbar("HighS", "Control", &iHighS, 255);
+
+	// Value
+	createTrackbar("LowV", "Control", &iLowV, 255);
+	createTrackbar("HighV", "Control", &iHighV, 255);
+
+	Mat imgTmp;
+	cap.read(imgTmp);
+
+	//Mat imgLines = Mat::zeros(imgTmp.size(), CV_8UC3);;
+
+	vector<Point> lastCenters;
+	while (true)
+	{
+		Mat imgOriginal;
+
+		cap.read(imgOriginal);
+		flip(imgOriginal, imgOriginal, 1);
+		// Eliminer bruit
+		medianBlur(imgOriginal, imgOriginal, 3);
+
+		// Convertir à HSV
+		Mat imgHSV;
+		cvtColor(imgOriginal, imgHSV, COLOR_BGR2HSV);
+
+		// Filtrer la couleur ROUGE
+		Mat lowerRedThres;
+		Mat upperRedThres;
+		inRange(imgHSV, Scalar(0, 100, 100), Scalar(10, 255, 255), lowerRedThres);
+		inRange(imgHSV, Scalar(160, 100, 100), Scalar(179, 255, 255), upperRedThres);
+		Mat red_hue_image;
+		addWeighted(lowerRedThres, 1.0, upperRedThres, 1.0, 0.0, red_hue_image);
+		GaussianBlur(red_hue_image, red_hue_image, Size(9, 9), 2, 2);
+		//imshow("RED Image", red_hue_image);
+
+		// Filtrer la couleur BLEUE
+		Mat blue_hue_image;
+		inRange(imgHSV, Scalar(100, 100, 90), Scalar(130, 255, 255), blue_hue_image);
+		GaussianBlur(blue_hue_image, blue_hue_image, Size(9, 9), 2, 2);
+		imshow("BLUE Image", blue_hue_image);
+
+		// Filtrer la couleur VERTE
+		Mat green_hue_image;
+		inRange(imgHSV, Scalar(50, 90, 50), Scalar(90, 255, 255), green_hue_image);
+		GaussianBlur(green_hue_image, green_hue_image, Size(9, 9), 2, 2);
+		imshow("GREEN Image", green_hue_image);
+
+		// Stockage des points de reconnaissance
+		vector<Vec3f> circles;
+		HoughCircles(green_hue_image, circles, CV_HOUGH_GRADIENT, 2, green_hue_image.rows / 4, 100, 60, 1, 400);
+
+		vector<Point> centers;
+		// traitement des points détectés
+		for (int i = 0; i < circles.size(); i++)
+		{
+			Vec3f p = circles[i];
+			if (cvRound(p[2]) >= 5)
+			{
+				centers.push_back(Point(cvRound(p[0]), cvRound(p[1])));
+				circle(imgOriginal, cvPoint(cvRound(p[0]), cvRound(p[1])),
+					cvRound(p[2]), CV_RGB(255, 0, 0), 1, 8, 0);
+			}
+		}
+
+		if (centers.size() == 2)
+		{
+			if (lastCenters.size() != 2)
+				lastCenters = centers;
+			else
+			{
+				double dist0 = cv::norm(centers[0] - lastCenters[0]);
+				double dist1 = cv::norm(centers[1] - lastCenters[1]);
+				cout << "dist0 = " << dist0 << " & dist1 = " << dist1 << endl;
+				cout << "c0 = " << centers[0] << " & c1 = " << centers[1] << endl;
+				cout << "LC0 = " << lastCenters[0] << " & LC1 = " << lastCenters[1] << endl;
+				if (dist0 < 20 && dist1 < 20)
+					centers = lastCenters;
+				else
+					lastCenters = centers;
+			}
+			Rect rec(centers[0], centers[1]);
+			rectangle(imgOriginal, rec, CV_RGB(255, 255, 255), CV_FILLED, 8, 0);
+		}
+
+		Mat imgThresholded;
+		inRange(imgHSV, Scalar(iLowH, iLowS, iLowV), Scalar(iHighH, iHighS, iHighV), imgThresholded);
+		//imshow("Thresholded Image", imgThresholded); 
+		//imgOriginal = imgOriginal + imgLines;
+		imshow("Original", imgOriginal);
+
+		if (waitKey(10) == 27)
+		{
+			cout << "Quit" << endl;
+			break;
+		}
+	}
+
+	return 0;
+}
+
+/////////////// Projet de calibration des couleurs
+int Calibration()
+{
+	VideoCapture cap(0);
+
+	if (!cap.isOpened())
 	{
 		cout << "Cannot open the web cam" << endl;
 		return -1;
@@ -270,10 +451,10 @@ int __main(int argc, char** argv)
 
 		inRange(imgHSV, Scalar(iLowH, iLowS, iLowV), Scalar(iHighH, iHighS, iHighV), imgThresholded);
 
-		imshow("Thresholded Image", imgThresholded); 
+		imshow("Thresholded Image", imgThresholded);
 
 		imgOriginal = imgOriginal + imgLines;
-		imshow("Original", imgOriginal); 
+		imshow("Original", imgOriginal);
 
 		if (waitKey(10) == 27)
 		{
