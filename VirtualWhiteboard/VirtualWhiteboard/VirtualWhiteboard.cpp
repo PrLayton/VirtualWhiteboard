@@ -1,6 +1,8 @@
 #include "stdafx.h"
 #include "VirtualWhiteboard.h"
 
+int src = 1;
+
 int main(int argc, char* argv[])
 {
 	//Finger();
@@ -15,6 +17,7 @@ vector<Point> DetectScreen(Mat image, vector<Point> &lastCenters, double minDist
 	// Filtrer la couleur VERTE - Marqueur pour l'écran
 	Mat green_hue_image;
 	inRange(image, Scalar(50, 90, 50), Scalar(90, 255, 255), green_hue_image);
+	//inRange(image, Scalar(20, 90, 0), Scalar(100, 255, 255), green_hue_image);
 	GaussianBlur(green_hue_image, green_hue_image, Size(9, 9), 2, 2);
 	imshow("GREEN Image", green_hue_image);
 
@@ -27,7 +30,7 @@ vector<Point> DetectScreen(Mat image, vector<Point> &lastCenters, double minDist
 	for (int i = 0; i < circles.size(); i++)
 	{
 		Vec3f p = circles[i];
-		if (cvRound(p[2]) >= 5)
+		if (cvRound(p[2]) >= 15)
 			centers.push_back(Point(cvRound(p[0]), cvRound(p[1])));
 	}
 
@@ -40,6 +43,7 @@ vector<Point> DetectScreen(Mat image, vector<Point> &lastCenters, double minDist
 			double dist0 = cv::norm(centers[0] - lastCenters[0]);
 			double dist1 = cv::norm(centers[1] - lastCenters[1]);
 			if (dist0 < minDist && dist1 < minDist)
+			//if (norm(lastCenters[0] - lastCenters[1]) > 80000)
 				centers = lastCenters;
 			else
 				lastCenters = centers;
@@ -55,7 +59,7 @@ int Detection()
 	// Default capture size - 640x480
 	//CvSize size = cvSize(640, 480);
 
-	VideoCapture cap(0); //capture the video from webcam
+	VideoCapture cap(src); //capture the video from webcam
 	// WebCam externe : cap(1)
 
 	if (!cap.isOpened())  // if not success, exit program
@@ -64,21 +68,18 @@ int Detection()
 		return -1;
 	}
 
+	int WC = 640, HC = 480;
 	// Tend au maximum
-	cap.set(CV_CAP_PROP_FRAME_WIDTH, 1280);
-	cap.set(CV_CAP_PROP_FRAME_HEIGHT, 720);
+	cap.set(CV_CAP_PROP_FRAME_WIDTH, WC);
+	cap.set(CV_CAP_PROP_FRAME_HEIGHT, HC);
 
 	// Les fenêtres
 	cvNamedWindow("Camera", CV_WINDOW_AUTOSIZE);
-	//cvNamedWindow("HSV", CV_WINDOW_AUTOSIZE);
 	cvNamedWindow("After Color Filtering", CV_WINDOW_AUTOSIZE);
 
 	// Pour la balle rouge
 	Scalar hsv_min;
 	Scalar hsv_max;
-	// Données de la doc
-	//Scalar(150, 84, 130, 0);
-	//Scalar(358, 256, 255, 0);
 	Scalar greenLower = Scalar(29, 86, 6);
 	Scalar greenUpper = Scalar(64, 255, 255);
 	// Hue modulable dans l'interface
@@ -108,10 +109,15 @@ int Detection()
 	int timeNoDetection = 0;
 	int currentTimeNoDetection = 0;
 
-	Mat screen;
+	int WS = 800, HS = 600;
+	Mat screen(Size(WS, HS), CV_8UC3);
+
 	vector<Point> lastCenters;
+	Point centerDecalage(0,0);
 	while (1)
 	{
+		Rect rec(Point(0, 0), Point(WS, HS));
+		rectangle(screen, rec, CV_RGB(0, 0, 0), CV_FILLED, 8, 0);
 		Mat frame;
 		cap.read(frame);
 		if (frame.empty())
@@ -122,20 +128,20 @@ int Detection()
 		}
 		
 		// Flipper l'image
-		flip(frame, frame, 1);
+		//flip(frame, frame, 1);
 		// Pour le grain
 		medianBlur(frame, frame, 3);
 		// HSV plus facile à traiter
 		cvtColor(frame, hsv_frame, CV_BGR2HSV);
 
 		vector<Point> centers = DetectScreen(hsv_frame, lastCenters, 200);
+		int W = 1, H = 1;
 		if (centers.size() == 2)
 		{
-			Rect rec(centers[0], centers[1]);
-			rectangle(frame, rec, CV_RGB(255, 255, 255), CV_FILLED, 8, 0);
-			screen = frame(rec).clone();
+			centerDecalage = centers[0].y < centers[1].y ? centers[0] : centers[1];
+			W = centers[0].x > centers[1].x ? centers[0].x - centers[1].x : centers[1].x - centers[0].x;
+			H = centers[0].y > centers[1].y ? centers[0].y - centers[1].y : centers[1].y - centers[0].y;
 		}
-
 		inRange(hsv_frame, Scalar(100, 100, 90), Scalar(130, 255, 255), thresholdedFinal);
 		//Orange
 		//inRange(hsv_frame, Scalar(0, 100, 100, 0), Scalar(10, 255, 255, 0), thresholded);
@@ -158,7 +164,7 @@ int Detection()
 
 		// Stockage des points de reconnaissance
 		vector<Vec3f> storage;
-		HoughCircles(thresholdedFinal, storage, CV_HOUGH_GRADIENT, 2, thresholdedFinal.rows / 4, 100, 60, 1, 400);
+		HoughCircles(thresholdedFinal, storage, CV_HOUGH_GRADIENT, 2, thresholdedFinal.rows / 4, 100, 60, 10, 400);
 		// Au méthode avec les contours
 		/*Mat result;
 		findContours(thresholded, storage, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
@@ -170,7 +176,7 @@ int Detection()
 		// Traitement du clic avec la balle
 		if (storage.size() == 0) {
 			if (currentTimeNoDetection == 0 && pts.size() > 0) {
-				tmpPt = Point(pts[pts.size()].x, pts[pts.size()].y);
+				tmpPt = Point(pts[pts.size()-1].x, pts[pts.size()-1].y);
 			}
 			currentTimeNoDetection++;
 			cout << "temps sans marqueur : " << currentTimeNoDetection << endl;
@@ -207,7 +213,7 @@ int Detection()
 
 			//cout << ((pt.x - lastPt.x)) << "  " << sqrt((pt.y - lastPt.y)) << endl;
 			// Pour éviter les tremblements
-			if (pow((pt.x - lastPt.x), 2.0) > 10 && pow((pt.y - lastPt.y), 2.0) > 10) {
+			if (pow((pt.x - lastPt.x), 2.0) > 5 && pow((pt.y - lastPt.y), 2.0) > 5) {
 				lastPt = pt;
 				// Stockage des points
 				pts.push_back(pt);
@@ -216,7 +222,7 @@ int Detection()
 		
 		// Changement de couleur
 		if (pts.size() > 0)
-			if(pts[pts.size()-1].x > 550 && pts[pts.size()-1].y > 350) {
+			if(pts[pts.size()-1].x > 450 && pts[pts.size()-1].y > 250) {
 			if (!alreadyChangedColor) {
 				color = Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255), 150);
 				alreadyChangedColor = true;
@@ -226,13 +232,22 @@ int Detection()
 			alreadyChangedColor = false;
 		}
 
-
-		for (size_t i = 1; i < pts.size(); i++)
+		int nb = 0;
+		for (int i = 1; i < pts.size(); i++)
 		{
-			int thichness = int(10/(pts.size()-i)+2);
-			line(screen, pts[i - 1], pts[i], color, thichness);
+			int thickness = int(10/(pts.size()-i)+2);
+			Point p1 = convertCoord(pts[i - 1], centerDecalage, W, H, WS, HS);
+			Point p2 = convertCoord(pts[i], centerDecalage, W, H, WS, HS);
+			//Point p1(pts[i - 1].x * screen.size().width / WC, pts[i - 1].y * screen.size().height / HC);
+			//Point p2(pts[i].x * screen.size().width / WC, pts[i].y * screen.size().height / HC);
+			line(screen, p1, p2, color, thickness);
+			//line(screen, pts[i - 1], pts[i], color, thichness);
+			nb++;
 		}
+		cout << "Number loop = " << nb << endl;
+
 		if (pts.size() > 30) {
+			cout << pts.size() << endl;
 			pts.erase(pts.begin());
 		}
 
@@ -247,11 +262,10 @@ int Detection()
 		imshow("After Color Filtering", thresholdedFinal);
 		if (screen.size().width > 0 && screen.size().height > 0)
 		{
-			cvNamedWindow("ECRAN VIRTUELLE", CV_WINDOW_AUTOSIZE);
-			//cvSetWindowProperty("ECRAN VIRTUELLE", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
+			cvNamedWindow("ECRAN VIRTUELLE", CV_WINDOW_NORMAL);
+			cvSetWindowProperty("ECRAN VIRTUELLE", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
+			//line(screen, Point(0, 0), Point(screen.size().width, screen.size().height), CV_RGB(255, 0, 0), 2, 8, 0);
 			imshow("ECRAN VIRTUELLE", screen);
-
-			//imshow("ECRAN VIRTUELLE", screen);
 		}
 		imshow("Camera", frame);
 		moveWindow("Camera", 10, 10);
@@ -269,10 +283,20 @@ int Detection()
 	return 0;
 }
 
+Point convertCoord(Point p, Point decalage, int W, int H, int WS, int HS)
+{
+	Point temp = p - decalage;
+	int x = cvRound(temp.x * WS * 1.0 / (double)W);
+	x = x > 0 ? x : 0;
+	int y = cvRound(temp.y * HS * 1.0 / (double)H);
+	y = y > 0 ? y : 0;
+	return Point(x, y);
+}
+
 // Fonction pour dessiner l'écran
 int DrawScreen()
 {
-	VideoCapture cap(0);
+	VideoCapture cap(src);
 
 	if (!cap.isOpened())
 	{
@@ -400,7 +424,7 @@ int DrawScreen()
 /////////////// Projet de calibration des couleurs
 int Calibration()
 {
-	VideoCapture cap(0);
+	VideoCapture cap(src);
 
 	if (!cap.isOpened())
 	{

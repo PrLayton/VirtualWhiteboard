@@ -18,6 +18,7 @@ using namespace cv;
 using namespace std;
 
 vector<Point> DetectScreen(Mat image, vector<Point> &lastCenters, double minDist);
+Point convertCoord(Point p, Point decalage, int WC, int HC, int WS, int HS);
 int Detection();
 int DrawScreen();
 int Calibration();
