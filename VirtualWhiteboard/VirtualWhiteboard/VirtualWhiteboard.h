@@ -1,13 +1,15 @@
 #pragma once
 
-#include <iostream>
+#include "opencv2/opencv.hpp"
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/core/core.hpp"
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <cmath>
 #include <math.h>
 #include <float.h>
 #include <limits.h>
