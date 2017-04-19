@@ -141,7 +141,7 @@ int Detection()
 		//vector<Point> centers = DetectScreen(hsv_frame, lastCenters, 200);
 		// Filtrer la couleur VERTE - Marqueur pour l'écran
 		Mat green_hue_image;
-		inRange(hsv_frame, Scalar(20, 100, 100), Scalar(60, 255, 255), green_hue_image);
+		inRange(hsv_frame, Scalar(50, 100, 100), Scalar(70, 255, 255), green_hue_image);
 
 		if (!detected) {
 			centers.clear();
@@ -149,7 +149,7 @@ int Detection()
 			vector<vector<Point> > contours;
 			vector<Vec4i> hierarchy;
 
-			inRange(hsv_frame, Scalar(20, 100, 100), Scalar(60, 255, 255), green_hue_image);
+			//inRange(hsv_frame, Scalar(20, 100, 100), Scalar(60, 255, 255), green_hue_image);
 			//inRange(image, Scalar(20, 90, 0), Scalar(100, 255, 255), green_hue_image);
 			//GaussianBlur(green_hue_image, green_hue_image, Size(9, 9), 2, 2);
 			erode(green_hue_image, green_hue_image, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
@@ -209,7 +209,7 @@ int Detection()
 			H = centers[0].y > centers[1].y ? centers[0].y - centers[1].y : centers[1].y - centers[0].y;
 		}
 		//inRange(hsv_frame, Scalar(100, 100, 90), Scalar(130, 255, 255), thresholdedFinal);
-		inRange(hsv_frame, Scalar(10, 100, 30), Scalar(40, 255, 255), thresholdedFinal);
+		inRange(hsv_frame, Scalar(30, 100, 100), Scalar(50, 255, 255), thresholdedFinal);
 		//Orange
 		//inRange(hsv_frame, Scalar(0, 100, 100, 0), Scalar(10, 255, 255, 0), thresholded);
 		//inRange(hsv_frame, Scalar(160, 100, 100, 0), Scalar(180, 255, 255, 0), thresholded2);
