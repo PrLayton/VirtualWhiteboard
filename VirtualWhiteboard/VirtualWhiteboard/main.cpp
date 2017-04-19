@@ -4,14 +4,17 @@
 
 int DetectMovement();
 
+int DetectionUI();
+
 int main(int argc, char* argv[])
 {
+	DetectionUI();
 	//Finger();
 	//Calibration();
 	//DrawScreen();
 	//Detection();
 	//cvPaint();
-	DetectMovement();
+	//DetectMovement();
 }
 
 
