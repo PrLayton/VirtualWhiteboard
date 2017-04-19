@@ -6,8 +6,11 @@
 
 int Hand();
 
+int DetectionUI();
+
 int main(int argc, char* argv[])
 {
+	DetectionUI();
 	//Finger();
 	//Calibration();
 	//DrawScreen();

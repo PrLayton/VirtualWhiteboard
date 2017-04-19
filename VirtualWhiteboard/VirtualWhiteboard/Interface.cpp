@@ -2,6 +2,217 @@
 #include "VirtualWhiteboard.h"
 #include "Interface.h"
 
+using namespace std;
+using namespace cv;
+
+void testUI()
+{
+	int WS = 800, HS = 600;
+	vector<int> xBounds, yBounds;
+	Mat ui = drawUI(WS, HS, white, 2, xBounds, yBounds);
+	
+	while (1)
+	{
+		Mat screen(Size(WS, HS), CV_8UC3);
+		rectangle(screen, Point(0, 0), Point(WS, HS), black, CV_FILLED, 8, 0);
+		add(screen, ui, screen);
+		imshow("testUI", screen);
+		switch (waitKey(10))
+		{
+		case 27: //'esc' key has been pressed, exit program.
+			return;
+		case 116: //'t' has been pressed. this will toggle tracking
+			ui = drawUI(WS, HS, red, 0, xBounds, yBounds);
+		}
+	}
+}
+
+vector<Scalar> colors = { red, green, blue, white };
+vector<int> thicknesses = { 5, 4, 3, 2, 1 };
+double scaleUI = 20.0f;
+
+// Projet de détection d'un marqueur avec UI
+int DetectionUI()
+{
+	VideoCapture cap(SOURCE); //capture the video from webcam
+
+	if (!cap.isOpened())  // if not success, exit program
+	{
+		cout << "Cannot open the webcam" << endl;
+		return -1;
+	}
+
+	// Taille camera
+	int WC = 640, HC = 480;
+	// Tend au maximum
+	cap.set(CV_CAP_PROP_FRAME_WIDTH, WC);
+	cap.set(CV_CAP_PROP_FRAME_HEIGHT, HC);
+
+	Mat  hsv_frame;
+	Mat  thresholdedFinal;
+
+	// Couleur de dessin
+	Scalar color = white;
+	int thickness = 3;
+
+	// Ecran de dessin
+	Mat drawing(Size(WC, HC), CV_8UC3);
+	//rectangle(screen, rec, CV_RGB(0, 0, 0), CV_FILLED, 8, 0);
+	// Coloration pour la detection
+	rectangle(drawing, Point(0,0), Point(WC,HC), black, CV_FILLED);
+
+	vector<int> xBounds, yBounds;
+	Mat ui = drawUI(WC, HC, color, thickness, xBounds, yBounds);
+	int size = (int)(WC / scaleUI);
+	Point lastPoint(-1, -1);
+	int confirm_choice_frames = 10;
+
+	while (1)
+	{
+		Mat frame;
+		cap.read(frame);
+		if (frame.empty())
+		{
+			fprintf(stderr, "ERROR: frame is null...\n");
+			getchar();
+			break;
+		}
+
+		// Flipper l'image
+		flip(frame, frame, 1);
+		// Pour le grain
+		//medianBlur(frame, frame, 3);
+		// HSV plus facile à traiter
+		cvtColor(frame, hsv_frame, CV_BGR2HSV);
+
+		// TRACKER VERT - STICKER
+		inRange(hsv_frame, Scalar(40, 90, 150), Scalar(90, 255, 255), thresholdedFinal);
+		
+		// Amélioration de la qualité du résultat
+		//erode(thresholdedFinal, thresholdedFinal, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		//dilate(thresholdedFinal, thresholdedFinal, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+
+		//dilate(thresholdedFinal, thresholdedFinal, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		//erode(thresholdedFinal, thresholdedFinal, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+
+		GaussianBlur(thresholdedFinal, thresholdedFinal, Size(9, 9), 2, 2);
+
+		// Stockage des points de reconnaissance
+		vector<Vec3f> storage;
+		HoughCircles(thresholdedFinal, storage, CV_HOUGH_GRADIENT, 2, thresholdedFinal.rows / 4, 100, 60, 10, 400);
+
+		// traitement des points détectés
+		if (storage.size() >= 1)
+		{
+			int k = 0;
+			for (k = 0; k < storage.size(); k++)
+				if (storage[k][2] >= 50)
+					break;
+			if (k >= storage.size())
+				continue;
+			//cout << "RADIUS = " << storage[k][2] << endl;
+			Vec3f p = storage[k];
+			Point pt = Point(cvRound(p[0]), cvRound(p[1]));
+			//cout << pt.x << "  " << pt.y << endl;
+
+			// Détection de l'UI des couleurs
+			if (pt.y >= yBounds[0] && pt.y <= yBounds[1])
+			{
+				if (pt.x <= xBounds[0] && pt.x >= xBounds[4])
+				{
+					color = ui.at<Vec3b>(pt.y, pt.x);
+					ui = drawUI(WC, HC, color, thickness, xBounds, yBounds);
+				}
+				/*else if (pt.x >= xBounds[4])
+				{
+				sprintf_s(buffer, "Changing color in %d", confirm_choice_frames);
+				cvPutText(frame, buffer, cvPoint(150, 70), &font, red);
+				confirm_choice_frames--;
+				if (confirm_choice_frames < 0) // confirm in 10 frames before clearing
+				{
+				confirm_choice_frames = 10;
+				color = colors[3];
+				cvPutText(frame, "Changed color.", cvPoint(150, 110), &font, white);
+				}
+				}*/
+			}
+			// Détection de l'UI des thickness
+			else if (pt.x <= xBounds[0] && pt.x >= xBounds[1])
+			{
+				for (int i = 0; i < thicknesses.size(); i++)
+				{
+					int radius = size / (2 * (6 - thicknesses[i]));
+					if (pt.y >= yBounds[i + 2] - radius && pt.y <= yBounds[i + 2] + radius)
+					{
+						thickness = thicknesses[i];
+						ui = drawUI(WC, HC, color, thickness, xBounds, yBounds);
+						break;
+					}
+				}				
+			}
+			// Dessiner le segment
+			if (lastPoint.x != -1 && pt.x <= xBounds[4])
+				line(drawing, lastPoint, pt, color, thickness, CV_AA);
+			lastPoint = pt;
+			circle(frame, pt, cvRound(p[2]), red);
+		}
+		else
+		{
+			lastPoint = Point(-1, -1);
+		}
+
+		add(frame, drawing, frame);
+		add(frame, ui, frame);
+		imshow("GREEN FILTRE", thresholdedFinal);
+		imshow("Camera", frame);
+
+		switch (waitKey(10))
+		{
+		case 27: //'esc' key has been pressed, exit program.
+			return 0;
+		case 116: //'t' has been pressed
+			break;
+		}
+	}
+
+	cvDestroyAllWindows();
+	cap.release();
+
+	return 0;
+}
+
+Mat drawUI(int WS, int HS, Scalar color, int thick, vector<int> &xBounds, vector<int> &yBounds)
+{
+	Mat ui(Size(WS, HS), CV_8UC3);
+	rectangle(ui, Point(0, 0), Point(WS, HS), black, CV_FILLED, 8, 0);
+	int size = (int)(WS / scaleUI);
+	int x = WS - size;
+	int y = size;
+	for (int i = 0; i < colors.size(); i++)
+	{
+		rectangle(ui, Point(x, y), Point(x - size, y + size), colors[i], CV_FILLED, 8, 0);
+		xBounds.push_back(x);
+		x -= size; 
+	}
+	xBounds.push_back(x);
+	
+	x = (int)(WS - size * 1.5f);
+	yBounds.push_back(y);
+	yBounds.push_back(y + size);
+	y = size * 4;
+	for (int i = 0; i < thicknesses.size(); i++)
+	{
+		yBounds.push_back(y);
+		int radius = size / (2 * (6-thicknesses[i]));
+		circle(ui, Point(x, y), radius, color, -1, CV_AA);
+		if (thicknesses[i] == thick)
+			circle(ui, Point(x, y), radius+2, color.conj(), 2, CV_AA);
+		y += size + radius;
+	}
+
+	return ui;
+}
+
 /*******************************************************************
 TCV3501 - Computer Vision and Image Understanding
 Farshid Tavakolizadeh (email@farshid.ws) http://farshid.ws
@@ -20,14 +231,6 @@ Control features:
 - clearing the screen + saving the image
 - exiting the program
 ********************************************************************/
-
-using namespace std;
-
-#define blue  CV_RGB(0,0,255)
-#define green CV_RGB(0,255,0)
-#define red   CV_RGB(255,0,0)
-#define white CV_RGB(255,255,255)
-#define black CV_RGB(0,0,0)
 
 void ClearScreen(IplImage* imgScribble, IplImage* imgDrawing)
 {
