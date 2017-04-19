@@ -142,6 +142,7 @@ int Detection()
 		// Filtrer la couleur VERTE - Marqueur pour l'écran
 		Mat green_hue_image;
 		inRange(hsv_frame, Scalar(50, 100, 100), Scalar(70, 255, 255), green_hue_image);
+		//inRange(hsv_frame, Scalar(40, 0, 100), Scalar(70, 255, 255), green_hue_image); // vidéoprojecteur
 
 		if (!detected) {
 			centers.clear();
