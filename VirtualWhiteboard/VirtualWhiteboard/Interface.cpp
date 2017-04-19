@@ -1,6 +1,9 @@
 #include "stdafx.h"
+
+#include <Windows.h>
 #include "VirtualWhiteboard.h"
 #include "Interface.h"
+#include "ScreenCapture.h"
 
 using namespace std;
 using namespace cv;
@@ -31,11 +34,13 @@ vector<Scalar> colors = { red, green, blue, white };
 vector<int> thicknesses = { 5, 4, 3, 2, 1 };
 double scaleUI = 20.0f;
 
+Mat hwnd2mat(HWND hwnd);
+
 // Projet de détection d'un marqueur avec UI
 int DetectionUI()
 {
 	VideoCapture cap(SOURCE); //capture the video from webcam
-
+	ScreenCapture window(0);
 	if (!cap.isOpened())  // if not success, exit program
 	{
 		cout << "Cannot open the webcam" << endl;
@@ -43,7 +48,7 @@ int DetectionUI()
 	}
 
 	// Taille camera
-	int WC = 640, HC = 480;
+	int WC = 1920, HC = 1080;
 	// Tend au maximum
 	cap.set(CV_CAP_PROP_FRAME_WIDTH, WC);
 	cap.set(CV_CAP_PROP_FRAME_HEIGHT, HC);
@@ -52,11 +57,11 @@ int DetectionUI()
 	Mat  thresholdedFinal;
 
 	// Couleur de dessin
-	Scalar color = white;
+	Scalar color = red;
 	int thickness = 3;
 
 	// Ecran de dessin
-	Mat drawing(Size(WC, HC), CV_8UC3);
+	Mat drawing(Size(WC, HC), CV_8UC4);
 	//rectangle(screen, rec, CV_RGB(0, 0, 0), CV_FILLED, 8, 0);
 	// Coloration pour la detection
 	rectangle(drawing, Point(0,0), Point(WC,HC), black, CV_FILLED);
@@ -69,7 +74,10 @@ int DetectionUI()
 
 	while (1)
 	{
-		Mat frame;
+		//Mat frame = hwnd2mat(GetDesktopWindow());
+		Mat screen, frame;
+		window >> screen;
+		
 		cap.read(frame);
 		if (frame.empty())
 		{
@@ -79,7 +87,7 @@ int DetectionUI()
 		}
 
 		// Flipper l'image
-		flip(frame, frame, 1);
+		//flip(frame, frame, 1);
 		// Pour le grain
 		//medianBlur(frame, frame, 3);
 		// HSV plus facile à traiter
@@ -161,10 +169,13 @@ int DetectionUI()
 			lastPoint = Point(-1, -1);
 		}
 
-		add(frame, drawing, frame);
-		add(frame, ui, frame);
+		add(screen, drawing, screen);
+		add(screen, ui, screen);
 		imshow("GREEN FILTRE", thresholdedFinal);
-		imshow("Camera", frame);
+		//cvNamedWindow("ECRAN VIRTUELLE", CV_WINDOW_NORMAL);
+		//cvSetWindowProperty("ECRAN VIRTUELLE", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
+		//imshow("Camera", frame);
+		imshow("ECRAN VIRTUELLE", screen);
 
 		switch (waitKey(10))
 		{
@@ -183,7 +194,7 @@ int DetectionUI()
 
 Mat drawUI(int WS, int HS, Scalar color, int thick, vector<int> &xBounds, vector<int> &yBounds)
 {
-	Mat ui(Size(WS, HS), CV_8UC3);
+	Mat ui(Size(WS, HS), CV_8UC4);
 	rectangle(ui, Point(0, 0), Point(WS, HS), black, CV_FILLED, 8, 0);
 	int size = (int)(WS / scaleUI);
 	int x = WS - size;
