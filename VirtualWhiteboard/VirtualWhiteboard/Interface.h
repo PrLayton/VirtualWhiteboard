@@ -8,8 +8,7 @@
 #define bound CV_RGB(127,127,127)
 #define doubleScreen false
 
-void ClearScreen(IplImage* imgScribble, IplImage* imgDrawing);
-IplImage* GetThresholdedImage(IplImage* img, CvScalar& lowerBound, CvScalar& upperBound);
-int cvPaint();
+double dist(Point x, Point y);
+pair<Point, double> circleFromPoints(Point p1, Point p2, Point p3);
 Mat drawUI(int WS, int HS, Scalar color, int thick, vector<int> &xBounds, vector<int> &yBounds);
-void testUI();
+int DetectionUI();
