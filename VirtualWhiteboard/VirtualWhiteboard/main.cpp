@@ -2,10 +2,6 @@
 #include "VirtualWhiteboard.h"
 #include "Interface.h"
 
-//#include "opencv2\tracking.hpp"
-
-int DetectionUI();
-
 int main(int argc, char* argv[])
 {
 	DetectionUI();
