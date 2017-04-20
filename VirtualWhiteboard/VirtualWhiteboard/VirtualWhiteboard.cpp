@@ -141,7 +141,7 @@ int Detection()
 		//vector<Point> centers = DetectScreen(hsv_frame, lastCenters, 200);
 		// Filtrer la couleur VERTE - Marqueur pour l'écran
 		Mat green_hue_image;
-		inRange(hsv_frame, Scalar(50, 100, 100), Scalar(70, 255, 255), green_hue_image);
+		inRange(hsv_frame, Scalar(30, 50, 50), Scalar(70, 255, 255), green_hue_image);
 		//inRange(hsv_frame, Scalar(40, 0, 100), Scalar(70, 255, 255), green_hue_image); // vidéoprojecteur
 
 		if (!detected) {
@@ -175,22 +175,29 @@ int Detection()
 			}
 
 			// Draw polygonal contour + bonding rects
-			//Mat drawing = Mat::zeros(green_hue_image.size(), CV_8UC3);
-			for (int i = 0; i < contours.size(); i++)
-			{
-				Scalar color = Scalar(255, 255, 255);
-				drawContours(green_hue_image, contours_poly, i, color, 1, 8, vector<Vec4i>(), 0, Point());
-				// Plusieurs detectes, on prend que le premier
-				if (i == 0)
-					rectangle(green_hue_image, boundRect[i].tl(), boundRect[i].br(), color, 2, 8, 0);
+			int maxcontour = 0, maxcontourIndex = 0;
+			for (int i = 0; i < contours.size(); i++) {
+
+				if (contourArea(contours[i]) > maxcontour) {
+					maxcontour = contourArea(contours[i]);
+					maxcontourIndex = i;
+				}
 			}
 
-			// Des qu'on en a un, alors c'est bon
-			if (contours.size() > 0) {
-				centers.push_back(boundRect[0].tl());
-				centers.push_back(boundRect[0].br());
-				rectangle(screen, rec, CV_RGB(0, 0, 0), CV_FILLED, 8, 0);
-				detected = true;
+			if (contours.size() > 0 && maxcontour > 10) {
+				Scalar color = Scalar(255, 255, 255);
+				drawContours(green_hue_image, contours_poly, maxcontourIndex, color, 1, 8, vector<Vec4i>(), 0, Point());
+				// Plusieurs detectes, on prend que le premier
+				rectangle(green_hue_image, boundRect[maxcontourIndex].tl(), boundRect[maxcontourIndex].br(), color, 2, 8, 0);
+
+				// Des qu'on en a un, alors c'est bon
+				if (contours.size() > 0) {
+					centers.push_back(boundRect[0].tl());
+					centers.push_back(boundRect[0].br());
+					//rectangle(screen, rec, CV_RGB(0, 0, 0), CV_FILLED, 8, 0);
+					//detected = true;
+				}
+
 			}
 
 			// A faire

@@ -75,7 +75,9 @@ int DetectionUI()
 	}
 
 	// Taille camera
-	int WC = 1920, HC = 1080;
+	int WC = 640, HC = 480;
+	if(doubleScreen)
+		WC = 1920, HC = 1080;
 	// Tend au maximum
 	cap.set(CV_CAP_PROP_FRAME_WIDTH, WC);
 	cap.set(CV_CAP_PROP_FRAME_HEIGHT, HC);
@@ -86,8 +88,12 @@ int DetectionUI()
 	Scalar color = red;
 	int thickness = 3;
 
+	Mat drawing;
 	// Ecran de dessin
-	Mat drawing(Size(WC, HC), CV_8UC4);
+	if (doubleScreen)
+		drawing = Mat(Size(WC, HC), CV_8UC4);
+	else
+		drawing = Mat(Size(WC, HC), CV_8UC3);
 	//rectangle(screen, rec, CV_RGB(0, 0, 0), CV_FILLED, 8, 0);
 	// Coloration pour la detection
 	rectangle(drawing, Point(0,0), Point(WC,HC), black, CV_FILLED);
@@ -117,17 +123,18 @@ int DetectionUI()
 	//thresholded difference image (for use in findContours() function)
 	Mat thresholdImage;
 
-	Point pt;
+	Point pt, lastPt = Point(0, 0);
 
 	cap.read(frame1);
 
 	while (1)
 	{
-		pt = Point(0, 0);
+		//pt = Point(0, 0);
 
 		//Mat frame = hwnd2mat(GetDesktopWindow());
 		Mat screen;
-		window >> screen;
+		if(doubleScreen)
+			window >> screen;
 		
 		cap.read(frame);
 		if (frame.empty())
@@ -189,132 +196,41 @@ int DetectionUI()
 			}
 		}
 
-		for (int i = 0; i<contours.size(); i++)
-			//Ignore all small insignificant areas
-			//if (contourArea(contours[i]) >= 500)
-			if (i == maxcontourIndex)
+		int index = maxcontourIndex;
+		if (contours.size()> 0 && contourArea(contours[index]) >= 500) {
+			//Draw contour
+			vector<vector<Point> > tcontours;
+			tcontours.push_back(contours[index]);
+			//drawContours(frame, tcontours, -1, cv::Scalar(0, 0, 255), 2);
+
+			//Detect Hull in current contour
+			vector<vector<Point> > hulls(1);
+			vector<vector<int> > hullsI(1);
+			convexHull(Mat(tcontours[0]), hulls[0], false);
+			convexHull(Mat(tcontours[0]), hullsI[0], false);
+			drawContours(frame, hulls, -1, cv::Scalar(0, 255, 0), 2);
+
+			//Find minimum area rectangle to enclose hand
+			RotatedRect rect = minAreaRect(Mat(tcontours[0]));
+
+			//Find Convex Defects
+			vector<Vec4i> defects;
+			if (hullsI[0].size() > 0)
 			{
-				//Draw contour
-				vector<vector<Point> > tcontours;
-				tcontours.push_back(contours[i]);
-				drawContours(frame, tcontours, -1, cv::Scalar(0, 0, 255), 2);
+				Point2f rect_points[4]; rect.points(rect_points);
 
-				//Detect Hull in current contour
-				vector<vector<Point> > hulls(1);
-				vector<vector<int> > hullsI(1);
-				convexHull(Mat(tcontours[0]), hulls[0], false);
-				convexHull(Mat(tcontours[0]), hullsI[0], false);
-				drawContours(frame, hulls, -1, cv::Scalar(0, 255, 0), 2);
+				Point2f p;
+				for (int j = 0; j < 4; j++)
+					p += rect_points[j];
+				p /= 4;
+				circle(frame, p, 5, Scalar(255, 255, 255), 5);
+				pt = Point(cvRound(p.x), cvRound(p.y));
 
-				//Find minimum area rectangle to enclose hand
-				RotatedRect rect = minAreaRect(Mat(tcontours[0]));
-
-				//Find Convex Defects
-				vector<Vec4i> defects;
-				if (hullsI[0].size()>0)
-				{
-					Point2f rect_points[4]; rect.points(rect_points);
-
-					Point2f p;
-					for (int j = 0; j < 4; j++)
-						p += rect_points[j];
-					p /= 4;
-					circle(frame, p, 5, Scalar(255, 255, 255), 5);
-					pt = Point(cvRound(p.x), cvRound(p.y));
-
-					for (int j = 0; j < 4; j++)
-						line(frame, rect_points[j], rect_points[(j + 1) % 4], Scalar(255, 0, 0), 1, 8);
-					Point rough_palm_center;
-					convexityDefects(tcontours[0], hullsI[0], defects);
-					if (defects.size() >= 3)
-					{
-						vector<Point> palm_points;
-						for (int j = 0; j<defects.size(); j++)
-						{
-							int startidx = defects[j][0]; Point ptStart(tcontours[0][startidx]);
-							int endidx = defects[j][1]; Point ptEnd(tcontours[0][endidx]);
-							int faridx = defects[j][2]; Point ptFar(tcontours[0][faridx]);
-							//Sum up all the hull and defect points to compute average
-							rough_palm_center += ptFar + ptStart + ptEnd;
-							palm_points.push_back(ptFar);
-							palm_points.push_back(ptStart);
-							palm_points.push_back(ptEnd);
-						}
-
-						//Get palm center by 1st getting the average of all defect points, this is the rough palm center,
-						//Then U chose the closest 3 points ang get the circle radius and center formed from them which is the palm center.
-						rough_palm_center.x /= defects.size() * 3;
-						rough_palm_center.y /= defects.size() * 3;
-						Point closest_pt = palm_points[0];
-						vector<pair<double, int> > distvec;
-						for (int i = 0; i<palm_points.size(); i++)
-							distvec.push_back(make_pair(dist(rough_palm_center, palm_points[i]), i));
-						sort(distvec.begin(), distvec.end());
-
-						//Keep choosing 3 points till you find a circle with a valid radius
-						//As there is a high chance that the closes points might be in a linear line or too close that it forms a very large circle
-						pair<Point, double> soln_circle;
-						for (int i = 0; i + 2<distvec.size(); i++)
-						{
-							Point p1 = palm_points[distvec[i + 0].second];
-							Point p2 = palm_points[distvec[i + 1].second];
-							Point p3 = palm_points[distvec[i + 2].second];
-							soln_circle = circleFromPoints(p1, p2, p3);//Final palm center,radius
-							if (soln_circle.second != 0)
-								break;
-						}
-
-						//Find avg palm centers for the last few frames to stabilize its centers, also find the avg radius
-						palm_centers.push_back(soln_circle);
-						if (palm_centers.size()>10)
-							palm_centers.erase(palm_centers.begin());
-
-						Point palm_center;
-						double radius = 0;
-						for (int i = 0; i<palm_centers.size(); i++)
-						{
-							palm_center += palm_centers[i].first;
-							radius += palm_centers[i].second;
-						}
-						palm_center.x /= palm_centers.size();
-						palm_center.y /= palm_centers.size();
-						radius /= palm_centers.size();
-
-						//Draw the palm center and the palm circle
-						//The size of the palm gives the depth of the hand
-						//circle(frame, palm_center, 5, Scalar(144, 144, 255), 3);
-						//circle(frame, palm_center, radius, Scalar(144, 144, 255), 2);
-
-						//Detect fingers by finding points that form an almost isosceles triangle with certain thesholds
-						int no_of_fingers = 0;
-						for (int j = 0; j<defects.size(); j++)
-						{
-							int startidx = defects[j][0]; Point ptStart(tcontours[0][startidx]);
-							int endidx = defects[j][1]; Point ptEnd(tcontours[0][endidx]);
-							int faridx = defects[j][2]; Point ptFar(tcontours[0][faridx]);
-							//X o--------------------------o Y
-							double Xdist = sqrt(dist(palm_center, ptFar));
-							double Ydist = sqrt(dist(palm_center, ptStart));
-							double length = sqrt(dist(ptFar, ptStart));
-
-							double retLength = sqrt(dist(ptEnd, ptFar));
-							//Play with these thresholds to improve performance
-							if (length <= 3 * radius&&Ydist >= 0.4*radius&&length >= 10 && retLength >= 10 && max(length, retLength) / min(length, retLength) >= 0.8)
-								if (min(Xdist, Ydist) / max(Xdist, Ydist) <= 0.8)
-								{
-									if ((Xdist >= 0.1*radius&&Xdist <= 1.3*radius&&Xdist<Ydist) || (Ydist >= 0.1*radius&&Ydist <= 1.3*radius&&Xdist>Ydist))
-										line(frame, ptEnd, ptFar, Scalar(0, 255, 0), 1), no_of_fingers++;
-								}
-
-
-						}
-
-						no_of_fingers = min(5, no_of_fingers);
-						//cout << "NO OF FINGERS: " << no_of_fingers << endl;
-					}
-				}
-
+				for (int j = 0; j < 4; j++)
+					line(frame, rect_points[j], rect_points[(j + 1) % 4], Scalar(255, 0, 0), 1, 8);
 			}
+
+		}
 		
 		//imshow("Frame", frame);
 		imshow("Background", fore);
@@ -392,23 +308,34 @@ int DetectionUI()
 				}				
 			}
 			// Dessiner le segment
-			if (lastPoint.x != -1 && pt.x <= xBounds[4])
-				line(drawing, lastPoint, pt, color, thickness, CV_AA);
-			lastPoint = pt;
+			if (/*lastPoint.x != -1 &&*/ pt.x <= xBounds[4])
+				if (pow((pt.x - lastPt.x), 2.0) > 5 && pow((pt.y - lastPt.y), 2.0) > 5) {
+					line(drawing, lastPoint, pt, color, thickness, CV_AA);
+					lastPt = pt;
+				}
 			//circle(frame, pt, cvRound(p[2]), red);
 		}
 		else
 		{
-			lastPoint = Point(-1, -1);
+			//lastPoint = Point(-1, -1);
 		}
 
-		add(screen, drawing, screen);
-		add(screen, ui, screen);
-		imshow("GREEN FILTRE", thresholdedFinal);
+		if (doubleScreen)
+			//add(screen, drawing, screen);
+			//add(screen, ui, screen);
+		{
+			imshow("GREEN FILTRE", thresholdedFinal);
+			imshow("ECRAN VIRTUELLE", screen);
+		}
+		else
+		{
+			add(frame, drawing, frame);
+			add(frame, ui, frame);
+			imshow("Camera", frame);
+		}
+
 		//cvNamedWindow("ECRAN VIRTUELLE", CV_WINDOW_NORMAL);
 		//cvSetWindowProperty("ECRAN VIRTUELLE", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
-		//imshow("Camera", frame);
-		imshow("ECRAN VIRTUELLE", screen);
 
 		switch (waitKey(10))
 		{
@@ -432,6 +359,7 @@ int DetectionUI()
 			}
 			pixel = cv::Vec3b(h / 16, s / 16, v / 16);
 			cout << h / 16 << " " << s / 16 << " " << v / 16 << endl;
+			rectangle(drawing, Point(0, 0), Point(WC, HC), black, CV_FILLED);
 			break;
 		}
 	}
@@ -444,7 +372,11 @@ int DetectionUI()
 
 Mat drawUI(int WS, int HS, Scalar color, int thick, vector<int> &xBounds, vector<int> &yBounds)
 {
-	Mat ui(Size(WS, HS), CV_8UC4);
+	Mat ui;
+	if (doubleScreen)
+		ui = Mat(Size(WS, HS), CV_8UC4);
+	else
+		ui = Mat(Size(WS, HS), CV_8UC3);
 	rectangle(ui, Point(0, 0), Point(WS, HS), black, CV_FILLED, 8, 0);
 	int size = (int)(WS / scaleUI);
 	int x = WS - size;

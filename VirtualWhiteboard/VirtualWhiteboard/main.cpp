@@ -4,8 +4,6 @@
 
 //#include "opencv2\tracking.hpp"
 
-int Hand();
-
 int DetectionUI();
 
 int main(int argc, char* argv[])
@@ -17,5 +15,4 @@ int main(int argc, char* argv[])
 	Detection();
 	//cvPaint();
 	//DetectMovement();
-	//Hand();
 }
