@@ -7,6 +7,20 @@
 using namespace std;
 using namespace cv;
 
+// Get the horizontal and vertical screen sizes in pixel
+void GetDesktopResolution(int& horizontal, int& vertical)
+{
+	RECT desktop;
+	// Get a handle to the desktop window
+	const HWND hDesktop = GetDesktopWindow();
+	// Get the size of screen to the variable desktop
+	GetWindowRect(hDesktop, &desktop);
+	// The top left corner will have coordinates (0,0)
+	// and the bottom right corner will have coordinates
+	// (horizontal, vertical)
+	horizontal = desktop.right;
+	vertical = desktop.bottom;
+}
 
 ScreenCapture::ScreenCapture(int displayIndex)
 {
@@ -20,6 +34,8 @@ void ScreenCapture::open(int displayIndex)
 	EnumDisplayMonitors(NULL, NULL, monitorEnumProc, (LPARAM)&enumState);
 
 	this->captureArea = cv::Rect2d(enumState.outRect.left, enumState.outRect.top, enumState.outRect.right - enumState.outRect.left, enumState.outRect.bottom - enumState.outRect.top);
+	width = captureArea.width;
+	height = captureArea.height;
 	this->targetWindow = GetDesktopWindow();
 }
 

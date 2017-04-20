@@ -6,7 +6,7 @@
 #define white CV_RGB(255,255,255)
 #define black CV_RGB(0,0,0)
 #define bound CV_RGB(127,127,127)
-#define doubleScreen false
+
 
 double dist(Point x, Point y);
 pair<Point, double> circleFromPoints(Point p1, Point p2, Point p3);

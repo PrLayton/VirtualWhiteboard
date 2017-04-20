@@ -14,20 +14,21 @@ double scaleUI = 20.0f;
 
 bool showUI = false;
 
-struct cabibrationData {
+struct cabibrationData 
+{
 	int WS = 1600, HS = 900;
 	int W = 1, H = 1;
 	Point centerDecalage = Point(0,0);
 	Point2i p1 = Point(0, 0), p2 = Point(0, 0);
 };
 
-bool Calibrate(cabibrationData *cd, Mat hsv_frame) {
+bool Calibrate(cabibrationData *cd, Mat camFrame) 
+{
 	Mat green_hue_image;
-	cvtColor(hsv_frame, green_hue_image, CV_BGR2HSV);
+	cvtColor(camFrame, green_hue_image, CV_BGR2HSV);
 	inRange(green_hue_image, Scalar(30, 100, 100), Scalar(70, 255, 255), green_hue_image);
 
 	vector<Point> centers;
-
 	vector<vector<Point> > contours;
 	vector<Vec4i> hierarchy;
 
@@ -54,15 +55,16 @@ bool Calibrate(cabibrationData *cd, Mat hsv_frame) {
 
 	// Draw polygonal contour + bonding rects
 	int maxcontour = 0, maxcontourIndex = 0;
-	for (int i = 0; i < contours.size(); i++) {
-
-		if (contourArea(contours[i]) > maxcontour) {
+	for (int i = 0; i < contours.size(); i++) 
+	{
+		if (contourArea(contours[i]) > maxcontour) 
+		{
 			maxcontour = contourArea(contours[i]);
 			maxcontourIndex = i;
 		}
 	}
-
-	if (contours.size() > 0 && maxcontour > 10) {
+	if (contours.size() > 0 && maxcontour > 10) 
+	{
 		Scalar color = Scalar(255, 255, 255);
 		drawContours(green_hue_image, contours_poly, maxcontourIndex, color, 1, 8, vector<Vec4i>(), 0, Point());
 		// Plusieurs detectes, on prend que le premier
@@ -76,12 +78,18 @@ bool Calibrate(cabibrationData *cd, Mat hsv_frame) {
 		cd->W = centers[0].x > centers[1].x ? centers[0].x - centers[1].x : centers[1].x - centers[0].x;
 		cd->H = centers[0].y > centers[1].y ? centers[0].y - centers[1].y : centers[1].y - centers[0].y;
 	}
-	else
-	{
-		return false;
-	}
+	// Fenêtre pour confirmer la bonne calibration
+	imshow("cameraCalib", camFrame);
+	imshow("calib", green_hue_image);
 
-	return true;
+	switch (waitKey(10))
+	{
+	case 99: // 'c' : confirmer calibration ok
+		cvDestroyWindow("cameraCalib");
+		cvDestroyWindow("calib");
+		return true;
+	}
+	return false;
 }
 
 Point _convertCoord(Point p, Point decalage, int W, int H, int WS, int HS)
@@ -98,7 +106,8 @@ Point _convertCoord(Point p, Point decalage, int W, int H, int WS, int HS)
 int DetectionUI()
 {
 	VideoCapture cap(SOURCE); //capture the video from webcam
-	ScreenCapture window(0);
+	ScreenCapture mainWindow(0);
+	ScreenCapture monitor(1);
 	if (!cap.isOpened())  // if not success, exit program
 	{
 		cout << "Cannot open the webcam" << endl;
@@ -107,43 +116,42 @@ int DetectionUI()
 
 	// Taille camera
 	int WC = 640, HC = 480;
-	if(doubleScreen)
-		WC = 1920, HC = 1080;
-	int WS = 1280, HS = 720;
-	if(!doubleScreen)
-		WS = WC, HS = HC;
+	// Taille écran virtuel
+	int WS = -1, HS = -1;
+
 	// Tend au maximum
 	cap.set(CV_CAP_PROP_FRAME_WIDTH, WC);
 	cap.set(CV_CAP_PROP_FRAME_HEIGHT, HC);
 
-	Mat  thresholdedFinal;
-
-	// Couleur de dessin
+	// Ecran de dessin - NOIR
+	Mat drawing;
+	if (doubleScreen)
+	{
+		WS = monitor.width;
+		HS = monitor.height;
+		drawing = Mat(Size(WS, HS), CV_8UC4);
+	}
+	else
+	{
+		WS = WC;
+		HS = HC;
+		drawing = Mat(Size(WS, HS), CV_8UC3);
+	}
+	drawing = black;
+	
+	// Couleur de dessin - éléments de l'UI
 	Scalar color = red;
 	int thickness = 3;
-
-	Mat drawing;
-	// Ecran de dessin
-	if (doubleScreen)
-		drawing = Mat(Size(WS, HS), CV_8UC4);
-	else
-		drawing = Mat(Size(WS, HS), CV_8UC3);
-	//rectangle(screen, rec, CV_RGB(0, 0, 0), CV_FILLED, 8, 0);
-	// Coloration pour la detection
-	drawing = black;
-	//rectangle(drawing, Point(0,0), Point(WS,WS), black, CV_FILLED);
-
 	vector<int> xBounds, yBounds;
 	Mat ui = drawUI(WS, HS, color, thickness, xBounds, yBounds);
 	int size = (int)(WS / scaleUI);
 	int confirm_choice_frames = 10;
 
+	Mat  thresholdedFinal;
 	Mat frame;
 	Mat fore;
 	vector<pair<Point, double> > palm_centers;
 
-	//namedWindow("Frame");
-	//namedWindow("Background");
 	int backgroundFrame = 500;
 
 	Mat  hsv_frame;
@@ -164,14 +172,14 @@ int DetectionUI()
 
 	cap.read(frame1);
 
+	Mat calibScreen(Size(WS, HS), CV_8UC3);
+	calibScreen = green;
+
 	while (1)
 	{
-		//pt = Point(0, 0);
-
-		//Mat frame = hwnd2mat(GetDesktopWindow());
-		Mat screen(Size(WS, HS), CV_8UC3);
-		if(doubleScreen)
-			window >> screen;
+		Mat screen;
+		if (doubleScreen)
+			monitor >> screen;
 		
 		cap.read(frame);
 		if (frame.empty())
@@ -181,19 +189,25 @@ int DetectionUI()
 			break;
 		}
 
-		if (!detected) {
-			cvNamedWindow("ECRAN VIRTUELLE", CV_WINDOW_NORMAL);
-			cvSetWindowProperty("ECRAN VIRTUELLE", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
-			// Ecran de dessin
-			Rect rec(Point(0, 0), Point(WS, HS));
-			// Coloration pour la detection
-			rectangle(screen, rec, CV_RGB(0, 255, 0), CV_FILLED, 8, 0);
-			imshow("ECRAN VIRTUELLE", screen);
+		// Si webcam interne => FLIP
+		//flip(frame, frame, 1);
+		
+		if (!detected) 
+		{
+			cvNamedWindow("ECRAN CALIBRATION", CV_WINDOW_NORMAL);
+			cvSetWindowProperty("ECRAN CALIBRATION", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
+			cvMoveWindow("ECRAN CALIBRATION", -1920, 0);
+			imshow("ECRAN CALIBRATION", calibScreen);
+
+			calibrData.HS = HS;
+			calibrData.WS = WS;
 			detected = Calibrate(&calibrData, frame);
-			if (detected == true) {
-				cvDestroyWindow("ECRAN VIRTUELLE");
-			}
+			if (detected == true) 
+				cvDestroyWindow("ECRAN CALIBRATION");
+			else
+				continue;
 		}
+
 		Mat tmpMat;
 		cvtColor(frame, tmpMat, CV_BGR2HSV);
 		inRange(tmpMat, Scalar(30, 100, 100), Scalar(70, 255, 255), green_hue_image);
@@ -203,9 +217,7 @@ int DetectionUI()
 
 		vector<vector<Point> > contours;
 
-		//------------ Detection de déplacement
-
-		flip(frame, frame, 1);
+		//------------ Detection de déplacement		
 		/*
 		////// DETECTION DE DEPLACEMENT
 		vector<vector<Point> > contours;
@@ -377,9 +389,9 @@ int DetectionUI()
 		{
 			add(screen, drawing, screen);
 			add(screen, ui, screen);
-			cvNamedWindow("ECRAN VIRTUELLE", CV_WINDOW_NORMAL);
-			cvSetWindowProperty("ECRAN VIRTUELLE", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
-			imshow("ECRAN VIRTUELLE", screen);
+			cvNamedWindow("ECRAN VIRTUEL", CV_WINDOW_NORMAL);
+			cvSetWindowProperty("ECRAN VIRTUEL", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
+			imshow("ECRAN VIRTUEL", screen);
 		}
 		else
 		{
@@ -388,17 +400,20 @@ int DetectionUI()
 			imshow("Camera", frame);
 		}
 
-		
+		// LE SWITCH DOIT ETRE ICI POUR QUE LA BOUCLE WHILE FONCTIONNE
 		switch (waitKey(10))
 		{
 		case 27: //'esc' key has been pressed, exit program.
 			return 0;
-		case 99: // 'c' : clear screen
+		case 99: // 'c' : calibration screen
 			drawing = black;
+			detected = false;
 			break;
 		case 100: // 'd'
 			cap.read(frame1);
-			detected = false;
+			break;
+		case 110: // 'n' : new drawing
+			drawing = black;
 			break;
 		case 117: // 'u'
 			showUI = !showUI;
@@ -425,6 +440,7 @@ int DetectionUI()
 			drawing = black;
 			break;
 		}
+
 	}
 
 	cvDestroyAllWindows();
@@ -493,10 +509,4 @@ pair<Point, double> circleFromPoints(Point p1, Point p2, Point p3)
 	double radius = sqrt(pow(p2.x - centerx, 2) + pow(p2.y - centery, 2));
 
 	return make_pair(Point(centerx, centery), radius);
-}
-
-
-void ClearScreen(Mat& img)
-{
-	img = black;
 }

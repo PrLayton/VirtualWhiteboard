@@ -13,6 +13,9 @@ public:
 	void read(cv::Mat& destination);
 	ScreenCapture& operator >> (cv::Mat& destination);
 
+	int width;
+	int height;
+
 private:
 	cv::Rect2d captureArea;
 	HWND targetWindow = NULL;
@@ -29,3 +32,5 @@ struct MonitorIndexLookupInfo
 	RECT outRect;
 	int currentIndex;
 };
+
+void GetDesktopResolution(int& horizontal, int& vertical);
