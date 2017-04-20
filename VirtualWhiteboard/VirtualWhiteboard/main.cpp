@@ -8,11 +8,11 @@ int DetectionUI();
 
 int main(int argc, char* argv[])
 {
-	//DetectionUI();
+	DetectionUI();
 	//Finger();
 	//Calibration();
 	//DrawScreen();
-	Detection();
+	//Detection();
 	//cvPaint();
 	//DetectMovement();
 }

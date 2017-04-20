@@ -110,7 +110,7 @@ int Detection()
 	lastCenters.push_back(Point(0, 0));
 	lastCenters.push_back(Point(0, 0));
 	Point centerDecalage(0,0);
-	bool detected = false;
+	bool detected = true;
 	vector<Point> centers;
 
 	// Ecran de dessin
@@ -118,6 +118,8 @@ int Detection()
 	//rectangle(screen, rec, CV_RGB(0, 0, 0), CV_FILLED, 8, 0);
 	// Coloration pour la detection
 	rectangle(screen, rec, CV_RGB(0, 255, 0), CV_FILLED, 8, 0);
+
+	Point2i p1(0,0), p2(0,0);
 
 	while (1)
 	{
@@ -141,7 +143,7 @@ int Detection()
 		//vector<Point> centers = DetectScreen(hsv_frame, lastCenters, 200);
 		// Filtrer la couleur VERTE - Marqueur pour l'écran
 		Mat green_hue_image;
-		inRange(hsv_frame, Scalar(30, 50, 50), Scalar(70, 255, 255), green_hue_image);
+		inRange(hsv_frame, Scalar(30, 100, 100), Scalar(70, 255, 255), green_hue_image);
 		//inRange(hsv_frame, Scalar(40, 0, 100), Scalar(70, 255, 255), green_hue_image); // vidéoprojecteur
 
 		if (!detected) {
@@ -188,14 +190,16 @@ int Detection()
 				Scalar color = Scalar(255, 255, 255);
 				drawContours(green_hue_image, contours_poly, maxcontourIndex, color, 1, 8, vector<Vec4i>(), 0, Point());
 				// Plusieurs detectes, on prend que le premier
-				rectangle(green_hue_image, boundRect[maxcontourIndex].tl(), boundRect[maxcontourIndex].br(), color, 2, 8, 0);
+				//rectangle(green_hue_image, boundRect[maxcontourIndex].tl(), boundRect[maxcontourIndex].br(), color, 2, 8, 0);
+				p1 = boundRect[maxcontourIndex].tl();
+				p2 = boundRect[maxcontourIndex].br();
 
 				// Des qu'on en a un, alors c'est bon
 				if (contours.size() > 0) {
 					centers.push_back(boundRect[0].tl());
 					centers.push_back(boundRect[0].br());
-					//rectangle(screen, rec, CV_RGB(0, 0, 0), CV_FILLED, 8, 0);
-					//detected = true;
+					rectangle(screen, rec, CV_RGB(0, 0, 0), CV_FILLED, 8, 0);
+					detected = true;
 				}
 
 			}
@@ -205,6 +209,8 @@ int Detection()
 			//contours_poly.clear();
 			//boundRect.clear();
 		}
+
+		rectangle(green_hue_image, p1, p2, color, 2, 8, 0);
 
 		// Debug
 		imshow("GREEN Image", green_hue_image);
@@ -217,7 +223,8 @@ int Detection()
 			H = centers[0].y > centers[1].y ? centers[0].y - centers[1].y : centers[1].y - centers[0].y;
 		}
 		//inRange(hsv_frame, Scalar(100, 100, 90), Scalar(130, 255, 255), thresholdedFinal);
-		inRange(hsv_frame, Scalar(30, 100, 100), Scalar(50, 255, 255), thresholdedFinal);
+		inRange(hsv_frame, Scalar(30, 50, 50), Scalar(70, 255, 255), thresholdedFinal);
+		//inRange(hsv_frame, Scalar(30, 100, 100), Scalar(50, 255, 255), thresholdedFinal);
 		//Orange
 		//inRange(hsv_frame, Scalar(0, 100, 100, 0), Scalar(10, 255, 255, 0), thresholded);
 		//inRange(hsv_frame, Scalar(160, 100, 100, 0), Scalar(180, 255, 255, 0), thresholded2);
@@ -350,8 +357,16 @@ int Detection()
 
 		//storage.clear();
 
-		if ((cvWaitKey(10) & 255) == 27) break;
-
+		//if ((cvWaitKey(10) & 255) == 27) break;
+		switch (waitKey(10))
+		{
+		case 27: //'esc' key has been pressed, exit program.
+			return 0;
+		case 100: //d
+			rectangle(screen, rec, CV_RGB(0, 255, 0), CV_FILLED, 8, 0);
+			detected = false;
+			break;
+		}
 	}
 
 	cvDestroyAllWindows();

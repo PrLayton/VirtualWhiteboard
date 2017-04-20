@@ -63,6 +63,86 @@ double scaleUI = 20.0f;
 
 Mat hwnd2mat(HWND hwnd);
 
+struct cabibrationData {
+	int WS = 1600, HS = 900;
+	int W = 1, H = 1;
+	Point centerDecalage = Point(0,0);
+	Point2i p1 = Point(0, 0), p2 = Point(0, 0);
+};
+
+bool Calibrate(cabibrationData *cd, Mat hsv_frame) {
+	Mat green_hue_image;
+	cvtColor(hsv_frame, green_hue_image, CV_BGR2HSV);
+	inRange(green_hue_image, Scalar(30, 100, 100), Scalar(70, 255, 255), green_hue_image);
+
+	vector<Point> centers;
+
+	vector<vector<Point> > contours;
+	vector<Vec4i> hierarchy;
+
+	erode(green_hue_image, green_hue_image, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	dilate(green_hue_image, green_hue_image, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	dilate(green_hue_image, green_hue_image, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	erode(green_hue_image, green_hue_image, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+
+	// Contours
+	Canny(green_hue_image, green_hue_image, 100, 100 * 2, 3);
+	// Find contours
+	findContours(green_hue_image, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
+
+	// Approximate contours to polygons + get bounding rects
+	vector<vector<Point> > contours_poly(contours.size());
+	vector<Rect> boundRect(contours.size());
+
+	// Enveloppe convexe
+	for (int i = 0; i < contours.size(); i++)
+	{
+		approxPolyDP(Mat(contours[i]), contours_poly[i], 3, true);
+		boundRect[i] = boundingRect(Mat(contours_poly[i]));
+	}
+
+	// Draw polygonal contour + bonding rects
+	int maxcontour = 0, maxcontourIndex = 0;
+	for (int i = 0; i < contours.size(); i++) {
+
+		if (contourArea(contours[i]) > maxcontour) {
+			maxcontour = contourArea(contours[i]);
+			maxcontourIndex = i;
+		}
+	}
+
+	if (contours.size() > 0 && maxcontour > 10) {
+		Scalar color = Scalar(255, 255, 255);
+		drawContours(green_hue_image, contours_poly, maxcontourIndex, color, 1, 8, vector<Vec4i>(), 0, Point());
+		// Plusieurs detectes, on prend que le premier
+		//rectangle(green_hue_image, boundRect[maxcontourIndex].tl(), boundRect[maxcontourIndex].br(), color, 2, 8, 0);
+		cd->p1 = boundRect[maxcontourIndex].tl();
+		cd->p2 = boundRect[maxcontourIndex].br();
+		centers.push_back(boundRect[maxcontourIndex].tl());
+		centers.push_back(boundRect[maxcontourIndex].br());
+
+		cd->centerDecalage = centers[0].y < centers[1].y ? centers[0] : centers[1];
+		cd->W = centers[0].x > centers[1].x ? centers[0].x - centers[1].x : centers[1].x - centers[0].x;
+		cd->H = centers[0].y > centers[1].y ? centers[0].y - centers[1].y : centers[1].y - centers[0].y;
+	}
+	else
+	{
+		return false;
+	}
+
+	return true;
+}
+
+Point _convertCoord(Point p, Point decalage, int W, int H, int WS, int HS)
+{
+	Point temp = p - decalage;
+	int x = cvRound(temp.x * WS * 1.0 / (double)W);
+	x = x > 0 ? x : 0;
+	int y = cvRound(temp.y * HS * 1.0 / (double)H);
+	y = y > 0 ? y : 0;
+	return Point(x, y);
+}
+
 // Projet de détection d'un marqueur avec UI
 int DetectionUI()
 {
@@ -78,6 +158,7 @@ int DetectionUI()
 	int WC = 640, HC = 480;
 	if(doubleScreen)
 		WC = 1920, HC = 1080;
+	int WS = 1600, HS = 900;
 	// Tend au maximum
 	cap.set(CV_CAP_PROP_FRAME_WIDTH, WC);
 	cap.set(CV_CAP_PROP_FRAME_HEIGHT, HC);
@@ -124,6 +205,9 @@ int DetectionUI()
 	Mat thresholdImage;
 
 	Point pt, lastPt = Point(0, 0);
+	cabibrationData calibrData;
+	Mat green_hue_image;
+	bool detected = true;
 
 	cap.read(frame1);
 
@@ -132,7 +216,7 @@ int DetectionUI()
 		//pt = Point(0, 0);
 
 		//Mat frame = hwnd2mat(GetDesktopWindow());
-		Mat screen;
+		Mat screen(Size(WS, HS), CV_8UC3);
 		if(doubleScreen)
 			window >> screen;
 		
@@ -146,9 +230,29 @@ int DetectionUI()
 		// Flipper l'image
 		//flip(frame, frame, 1);
 
+		if (!detected) {
+			cvNamedWindow("ECRAN VIRTUELLE", CV_WINDOW_NORMAL);
+			cvSetWindowProperty("ECRAN VIRTUELLE", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
+			// Ecran de dessin
+			Rect rec(Point(0, 0), Point(WS, HS));
+			// Coloration pour la detection
+			rectangle(screen, rec, CV_RGB(0, 255, 0), CV_FILLED, 8, 0);
+			imshow("ECRAN VIRTUELLE", screen);
+			detected = Calibrate(&calibrData, frame);
+			if (detected == true) {
+				cvDestroyWindow("ECRAN VIRTUELLE");
+			}
+		}
+		Mat tmpMat;
+		cvtColor(frame, tmpMat, CV_BGR2HSV);
+		inRange(tmpMat, Scalar(30, 100, 100), Scalar(70, 255, 255), green_hue_image);
+		rectangle(green_hue_image, calibrData.p1, calibrData.p2, color, 2, 8, 0);
+		// Debug
+		imshow("GREEN Image", green_hue_image);
+
 		vector<vector<Point> > contours;
 
-		// Detection de déplacement
+		//------------ Detection de déplacement
 
 		//convert frame1 to gray scale for frame differencing
 		cv::cvtColor(frame1, grayImage1, COLOR_BGR2GRAY);
@@ -225,6 +329,7 @@ int DetectionUI()
 				p /= 4;
 				circle(frame, p, 5, Scalar(255, 255, 255), 5);
 				pt = Point(cvRound(p.x), cvRound(p.y));
+				//pt = _convertCoord(pt, calibrData.centerDecalage, calibrData.W, calibrData.H, calibrData.WS, calibrData.HS);
 
 				for (int j = 0; j < 4; j++)
 					line(frame, rect_points[j], rect_points[(j + 1) % 4], Scalar(255, 0, 0), 1, 8);
@@ -342,6 +447,7 @@ int DetectionUI()
 		case 27: //'esc' key has been pressed, exit program.
 			return 0;
 		case 100: //d
+			detected = false;
 			cap.read(frame1);
 			break;
 		case 116: //'t' has been pressed. this will toggle tracking
