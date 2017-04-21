@@ -15,6 +15,7 @@ vector<Scalar> colors = { red, green, blue, white };
 vector<int> thicknesses = { 1, 2, 3, 4, 5 };
 double scaleUI = 20.0f;
 bool showUI = false;
+bool alternativeMethod = true;
 
 // Projet de détection d'un marqueur avec UI
 int DetectionUI()
@@ -31,6 +32,7 @@ int DetectionUI()
 
 	// Résolution camera
 	int WC = 800, HC = 600;
+	//WC = 848, HC = 480; // Résolution caméra interne de Vu
 	// Résolution écran virtuel
 	int WS = -1, HS = -1;
 
@@ -84,8 +86,6 @@ int DetectionUI()
 
 	Mat calibScreen(Size(WS, HS), CV_8UC3);
 	calibScreen = green;
-
-	
 
 	cap.read(frame1);
 
@@ -257,8 +257,8 @@ int DetectionUI()
 			// Pour le grain
 			medianBlur(hsv_frame, hsv_frame, 3);	// 30ms
 			// 2ms
-			//inRange(hsv_frame, Scalar(40, 90, 150), Scalar(90, 255, 255), thresholdedFinal); // VERT
-			inRange(hsv_frame, Scalar(160, 100, 100), Scalar(179, 255, 255), thresholdedFinal); // ROSE
+			inRange(hsv_frame, Scalar(40, 70, 100), Scalar(70, 255, 255), thresholdedFinal); // VERT
+			//inRange(hsv_frame, Scalar(160, 100, 100), Scalar(179, 255, 255), thresholdedFinal); // ROSE
 			
 			GaussianBlur(thresholdedFinal, thresholdedFinal, Size(9, 9), 2, 2); // 10ms
 			
@@ -273,14 +273,14 @@ int DetectionUI()
 			{
 				int k = 0;
 				for (k = 0; k < storage.size(); k++)
-					if (storage[k][2] >= 50)
+					if (storage[k][2] >= 5)
 						break;
 				if (k < storage.size())
 				{
 					Vec3f p = storage[k];
 					pt = Point(cvRound(p[0]), cvRound(p[1]));
 					pt = convertCoord(pt, calibrData);
-					circle(frame, pt, cvRound(p[2]), red);
+					circle(screen, pt, cvRound(p[2]), red);
 				}
 			}
 			else
@@ -294,16 +294,20 @@ int DetectionUI()
 		if (pt.x > 0 && pt.y > 0)
 		{
 			// Détection de l'UI des couleurs
-			if (pt.y <= yBounds[0] && pt.y >= yBounds[1])
+			if (pt.y <= yBounds[0] + 20 && pt.y >= yBounds[1] - 20)
 			{
-				if (pt.x <= xBounds[0] && pt.x >= xBounds[xBounds.size() - 1])
+				for (int i = 0; i < colors.size(); i++)
 				{
-					color = ui.at<Vec3b>(pt.y, pt.x);
-					ui = drawUI(WS, HS, color, thickness);
+					if (pt.x <= xBounds[i] && pt.x >= xBounds[i + 1])
+					{
+						color = colors[i];
+						ui = drawUI(WS, HS, color, thickness);
+						break;
+					}
 				}
 			}
 			// Détection de l'UI des thickness
-			else if (pt.x <= xBounds[0] && pt.x >= xBounds[1])
+			if (pt.x <= xBounds[0] + 20 && pt.x >= xBounds[1] - 20)
 			{
 				for (int i = 0; i < thicknesses.size(); i++)
 				{
@@ -314,7 +318,7 @@ int DetectionUI()
 						ui = drawUI(WS, HS, color, thickness);
 						break;
 					}
-				}				
+				}
 			}
 			// Dessiner le segment
 			if (lastPoint.x != -1 && pt.x <= xBounds[xBounds.size() - 1])
@@ -350,6 +354,9 @@ int DetectionUI()
 			break;
 		case 100: // 'd'
 			cap.read(frame1);
+			break;
+		case 109: // 'm' : changer méthode de tracking
+			alternativeMethod = !alternativeMethod;
 			break;
 		case 110: // 'n' : new drawing
 			drawing = black;
@@ -414,7 +421,7 @@ void createBoundsUI(int WS, int HS, vector<int> &xBounds, vector<int> &yBounds)
 	for (int i = 0; i < thicknesses.size(); i++)
 	{
 		yBounds.push_back(y);
-		int radius = size / (2 * (thicknesses[thicknesses.size() - 1] + 1 - thicknesses[i]));
+		int radius = size / (2 * (6 - thicknesses[i]));
 		y -= size + radius;
 	}
 }
@@ -444,7 +451,7 @@ Mat drawUI(int WS, int HS, Scalar color, int thick)
 	y = HS - size * 4;
 	for (int i = 0; i < thicknesses.size(); i++)
 	{
-		int radius = size / (2 * (thicknesses[thicknesses.size() - 1] + 1 - thicknesses[i]));
+		int radius = size / (2 * (6 - thicknesses[i]));
 		circle(ui, Point(x, y), radius, color, -1, CV_AA);
 		if (thicknesses[i] == thick)
 			circle(ui, Point(x, y), radius+2, bound, 2, CV_AA);
@@ -460,7 +467,7 @@ bool Calibrate(CalibrationData &cd, Mat camFrame)
 	Mat green_hue_image;
 	cvtColor(camFrame, green_hue_image, CV_BGR2HSV);
 	//inRange(green_hue_image, Scalar(30, 100, 100), Scalar(70, 255, 255), green_hue_image);
-	inRange(green_hue_image, Scalar(50, 100, 100), Scalar(80, 255, 255), green_hue_image);
+	inRange(green_hue_image, Scalar(40, 0, 0), Scalar(80, 255, 255), green_hue_image);
 	//inRange(green_hue_image, Scalar(30, 100, 100), Scalar(70, 255, 255), green_hue_image);
 
 	vector<Point> centers;

@@ -521,7 +521,7 @@ int DrawScreen()
 /////////////// Projet de calibration des couleurs
 int Calibration()
 {
-	VideoCapture cap(src);
+	VideoCapture cap(SOURCE);
 
 	if (!cap.isOpened())
 	{
