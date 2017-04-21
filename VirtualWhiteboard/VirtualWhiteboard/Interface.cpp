@@ -257,7 +257,7 @@ int DetectionUI()
 			// Pour le grain
 			medianBlur(hsv_frame, hsv_frame, 3);	// 30ms
 			// 2ms
-			inRange(hsv_frame, Scalar(40, 70, 100), Scalar(70, 255, 255), thresholdedFinal); // VERT
+			inRange(hsv_frame, Scalar(30, 90, 100), Scalar(60, 255, 255), thresholdedFinal); // VERT
 			//inRange(hsv_frame, Scalar(160, 100, 100), Scalar(179, 255, 255), thresholdedFinal); // ROSE
 			
 			GaussianBlur(thresholdedFinal, thresholdedFinal, Size(9, 9), 2, 2); // 10ms
@@ -271,17 +271,18 @@ int DetectionUI()
 			// traitement des points détectés
 			if (storage.size() >= 1)
 			{
-				int k = 0;
-				for (k = 0; k < storage.size(); k++)
-					if (storage[k][2] >= 5)
-						break;
-				if (k < storage.size())
-				{
-					Vec3f p = storage[k];
-					pt = Point(cvRound(p[0]), cvRound(p[1]));
-					pt = convertCoord(pt, calibrData);
-					circle(screen, pt, cvRound(p[2]), red);
-				}
+				int index = 0;
+				float max = storage[0][2];
+				for (int k = 0; k < storage.size(); k++)
+					if (storage[k][2] > max)
+					{
+						max = storage[k][2];
+						index = k;
+					}
+				Vec3f p = storage[index];
+				pt = Point(cvRound(p[0]), cvRound(p[1]));
+				pt = convertCoord(pt, calibrData);
+				circle(screen, pt, cvRound(p[2]), red);
 			}
 			else
 			{
@@ -321,8 +322,8 @@ int DetectionUI()
 				}
 			}
 			// Dessiner le segment
-			if (lastPoint.x != -1 && pt.x <= xBounds[xBounds.size() - 1])
-				if (dist(pt, lastPoint) > 25 && showUI)
+			if (lastPoint.x != -1)
+				if (dist(pt, lastPoint) > 10 && showUI)
 					line(drawing, lastPoint, pt, color, thickness, CV_AA);
 			lastPoint = pt;
 		}
