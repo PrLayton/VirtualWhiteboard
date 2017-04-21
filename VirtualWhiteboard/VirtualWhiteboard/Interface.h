@@ -16,8 +16,8 @@ struct CalibrationData
 };
 
 double dist(Point x, Point y);
-pair<Point, double> circleFromPoints(Point p1, Point p2, Point p3);
 Point convertCoord(Point p, CalibrationData calibr);
+bool Calibrate(CalibrationData &cd, Mat camFrame);
 void createBoundsUI(int WS, int HS, vector<int> &xBounds, vector<int> &yBounds);
 Mat drawUI(int WS, int HS, Scalar color, int thick);
 int DetectionUI();
