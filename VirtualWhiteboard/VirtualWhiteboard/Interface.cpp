@@ -8,22 +8,8 @@
 using namespace std;
 using namespace cv;
 
-vector<Scalar> colors = { red, green, blue, white };
-vector<int> thicknesses = { 1, 2, 3, 4, 5 };
-double scaleUI = 20.0f;
-
-bool showUI = false;
-
-struct cabibrationData 
-{
-	int WS = 1920, HS = 1080;
-	int W = 0, H = 0;
-	Point centerDecalage = Point(0,0);
-	Point2i p1 = Point(0, 0), p2 = Point(0, 0);
-};
-
-// Calibration de la camera par rapport à l'écran
-bool Calibrate(cabibrationData *cd, Mat camFrame) 
+// Calibration de la camera par rapport à l'écran 
+bool Calibrate(CalibrationData &cd, Mat camFrame) 
 {
 	Mat green_hue_image;
 	cvtColor(camFrame, green_hue_image, CV_BGR2HSV);
@@ -74,15 +60,17 @@ bool Calibrate(cabibrationData *cd, Mat camFrame)
 		drawContours(green_hue_image, contours_poly, maxcontourIndex, color, 1, 8, vector<Vec4i>(), 0, Point());
 		//rectangle(green_hue_image, boundRect[maxcontourIndex].tl(), boundRect[maxcontourIndex].br(), color, 2, 8, 0);
 		// Enregistrement des coins pour dessin
-		cd->p1 = boundRect[maxcontourIndex].tl();
-		cd->p2 = boundRect[maxcontourIndex].br();
+		cd.p1 = boundRect[maxcontourIndex].tl();
+		cd.p2 = boundRect[maxcontourIndex].br();
 		centers.push_back(boundRect[maxcontourIndex].tl());
 		centers.push_back(boundRect[maxcontourIndex].br());
 
 		// Calcul du décalage 
-		cd->centerDecalage = centers[0].y < centers[1].y ? centers[0] : centers[1];
-		cd->W = centers[0].x > centers[1].x ? centers[0].x - centers[1].x : centers[1].x - centers[0].x;
-		cd->H = centers[0].y > centers[1].y ? centers[0].y - centers[1].y : centers[1].y - centers[0].y;
+		cd.centerDecalage = centers[0].y < centers[1].y ? centers[0] : centers[1];
+		cd.W = abs(centers[0].x - centers[1].x);
+		cd.H = abs(centers[0].y - centers[1].y);
+		drawContours(green_hue_image, contours_poly, maxcontourIndex, white, 1, 8, vector<Vec4i>(), 0);
+		rectangle(camFrame, cd.p1, cd.p2, red, 2);
 	}
 	// Fenêtre pour confirmer la bonne calibration
 	imshow("cameraCalib", camFrame);
@@ -98,22 +86,18 @@ bool Calibrate(cabibrationData *cd, Mat camFrame)
 	return false;
 }
 
-Point _convertCoord(Point p, Point decalage, int W, int H, int WS, int HS)
-{
-	Point temp = p - decalage;
-	int x = cvRound(temp.x * WS * 1.0 / (double)W);
-	x = x > 0 ? x : 0;
-	int y = cvRound(temp.y * HS * 1.0 / (double)H);
-	y = y > 0 ? y : 0;
-	return Point(x, y);
-}
+// Eléments de l'UI
+vector<Scalar> colors = { red, green, blue, white };
+vector<int> thicknesses = { 1, 2, 3, 4, 5 };
+double scaleUI = 20.0f;
+bool showUI = false;
 
 // Projet de détection d'un marqueur avec UI
 int DetectionUI()
 {
 	VideoCapture cap(SOURCE); //capture the video from webcam
-	ScreenCapture mainWindow(0);
-	ScreenCapture monitor(1);
+	ScreenCapture mainWindow(1);
+	ScreenCapture monitor(0);
 
 	if (!cap.isOpened())  // if not success, exit program
 	{
@@ -121,9 +105,9 @@ int DetectionUI()
 		return -1;
 	}
 
-	// Taille camera
+	// Résolution camera
 	int WC = 640, HC = 480;
-	// Taille écran virtuel
+	// Résolution écran virtuel
 	int WS = -1, HS = -1;
 
 	// Tend au maximum/résolution forcée
@@ -146,12 +130,12 @@ int DetectionUI()
 	}
 	// Ecran de dessin - NOIR
 	drawing = black;
-	
 	// Couleur de dessin - éléments de l'UI
 	Scalar color = red;
 	int thickness = 3;
 	vector<int> xBounds, yBounds;
-	Mat ui = drawUI(WS, HS, color, thickness, xBounds, yBounds);
+	createBoundsUI(WS, HS, xBounds, yBounds);
+	Mat ui = drawUI(WS, HS, color, thickness);
 	int size = (int)(WS / scaleUI);
 
 	Mat thresholdedFinal;
@@ -169,14 +153,13 @@ int DetectionUI()
 	//thresholded difference image (for use in findContours() function)
 	Mat thresholdImage;
 
-	cabibrationData calibrData;
+	CalibrationData calibrData;
 	Mat green_hue_image;
 	bool detected = true;
 	Point pt = Point(-1, -1), lastPoint = Point(-1, -1);
 
 	Mat calibScreen(Size(WS, HS), CV_8UC3);
 	calibScreen = green;
-	bool alternativeMethod = false;
 
 	cap.read(frame1);
 
@@ -207,24 +190,24 @@ int DetectionUI()
 		{
 			cvNamedWindow("ECRAN CALIBRATION", CV_WINDOW_NORMAL);
 			cvSetWindowProperty("ECRAN CALIBRATION", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
-			cvMoveWindow("ECRAN CALIBRATION", -1920, 0);
+			cvMoveWindow("ECRAN CALIBRATION", -WS, 0);
 			imshow("ECRAN CALIBRATION", calibScreen);
 
 			calibrData.HS = HS;
 			calibrData.WS = WS;
-			detected = Calibrate(&calibrData, frame);
+			detected = Calibrate(calibrData, frame);
 			if (detected == true) 
 				cvDestroyWindow("ECRAN CALIBRATION");
 			else
 				continue;
 		}
 
-		Mat tmpMat;
+		/*Mat tmpMat;
 		cvtColor(frame, tmpMat, CV_BGR2HSV);
 		inRange(tmpMat, Scalar(30, 100, 100), Scalar(70, 255, 255), green_hue_image);
 		rectangle(green_hue_image, calibrData.p1, calibrData.p2, color, 2, 8, 0);
 		// Debug de la calibration
-		imshow("GREEN Image", green_hue_image);
+		imshow("GREEN Image", green_hue_image);*/
 
 		if (!alternativeMethod) {
 			////// DETECTION DE DEPLACEMENT
@@ -307,7 +290,7 @@ int DetectionUI()
 					circle(frame, p, 5, Scalar(255, 255, 255), 5);
 					// Conversion
 					pt = Point(cvRound(p.x), cvRound(p.y));
-					//pt = _convertCoord(pt, calibrData.centerDecalage, calibrData.W, calibrData.H, calibrData.WS, calibrData.HS);
+					pt = convertCoord(pt, calibrData);
 
 					// Dessin du rectangle
 					for (int j = 0; j < 4; j++)
@@ -330,7 +313,7 @@ int DetectionUI()
 			imshow("Move detection", thresholdImage);
 			imshow("Color skin detection", fore);
 		}
-		else 
+		else
 		{
 			// DECTECTION PAR TRACKER VERT - STICKER
 			// HSV plus facile à traiter
@@ -339,7 +322,7 @@ int DetectionUI()
 			medianBlur(hsv_frame, hsv_frame, 3);
 
 			//inRange(hsv_frame, Scalar(40, 90, 150), Scalar(90, 255, 255), thresholdedFinal); // VERT
-			inRange(hsv_frame, Scalar(150, 125, 0), Scalar(179, 255, 255), thresholdedFinal); // ROUGE
+			inRange(hsv_frame, Scalar(160, 100, 100), Scalar(179, 255, 255), thresholdedFinal); // ROSE
 
 			GaussianBlur(thresholdedFinal, thresholdedFinal, Size(9, 9), 2, 2);
 			imshow("FILTRE", thresholdedFinal);
@@ -359,6 +342,7 @@ int DetectionUI()
 				//cout << "RADIUS = " << storage[k][2] << endl;
 				Vec3f p = storage[k];
 				pt = Point(cvRound(p[0]), cvRound(p[1]));
+				//pt = convertCoord(pt, calibrData);
 				circle(frame, pt, cvRound(p[2]), red);
 			}
 			else
@@ -376,7 +360,7 @@ int DetectionUI()
 				if (pt.x <= xBounds[0] && pt.x >= xBounds[xBounds.size() - 1])
 				{
 					color = ui.at<Vec3b>(pt.y, pt.x);
-					ui = drawUI(WS, HS, color, thickness, xBounds, yBounds);
+					ui = drawUI(WS, HS, color, thickness);
 				}
 			}
 			// Détection de l'UI des thickness
@@ -388,14 +372,14 @@ int DetectionUI()
 					if (pt.y >= yBounds[i + 2] - radius && pt.y <= yBounds[i + 2] + radius)
 					{
 						thickness = thicknesses[i];
-						ui = drawUI(WS, HS, color, thickness, xBounds, yBounds);
+						ui = drawUI(WS, HS, color, thickness);
 						break;
 					}
 				}				
 			}
 			// Dessiner le segment
 			if (lastPoint.x != -1 && pt.x <= xBounds[xBounds.size() - 1])
-				if (dist(pt, lastPoint) > 25)
+				if (dist(pt, lastPoint) > 25 && showUI)
 					line(drawing, lastPoint, pt, color, thickness, CV_AA);
 			lastPoint = pt;
 		}
@@ -406,14 +390,15 @@ int DetectionUI()
 			add(screen, ui, screen);
 			cvNamedWindow("ECRAN VIRTUEL", CV_WINDOW_NORMAL);
 			cvSetWindowProperty("ECRAN VIRTUEL", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
+			cvMoveWindow("ECRAN VIRTUEL", -WS, 0);
 			imshow("ECRAN VIRTUEL", screen);
 		}
 		else
 		{
 			add(frame, drawing, frame);
 			add(frame, ui, frame);
-			imshow("Camera", frame);
 		}
+		imshow("Camera", frame);
 
 		// LE SWITCH DOIT ETRE ICI POUR QUE LA BOUCLE WHILE FONCTIONNE
 		switch (waitKey(10))
@@ -432,10 +417,7 @@ int DetectionUI()
 			break;
 		case 117: // 'u'
 			showUI = !showUI;
-			if (showUI)
-				ui = drawUI(WS, HS, color, thickness, xBounds, yBounds);
-			else
-				ui = black;
+			ui = drawUI(WS, HS, color, thickness);
 			break;
 		case 116: //'t' has been pressed. this will toggle tracking
 			int h = 0, s = 0, v = 0;
@@ -464,32 +446,56 @@ int DetectionUI()
 	return 0;
 }
 
-Mat drawUI(int WS, int HS, Scalar color, int thick, vector<int> &xBounds, vector<int> &yBounds)
+// Calculer des coordonnées à utiliser pour distinguer les éléments de l'UI dans l'espace
+void createBoundsUI(int WS, int HS, vector<int> &xBounds, vector<int> &yBounds)
 {
-	Mat ui;
-	if (doubleScreen)
-		ui = Mat(Size(WS, HS), CV_8UC4);
-	else
-		ui = Mat(Size(WS, HS), CV_8UC3);
-	rectangle(ui, Point(0, 0), Point(WS, HS), black, CV_FILLED, 8, 0);
 	int size = (int)(WS / scaleUI);
 	int x = WS - size;
 	int y = HS - size;
 	for (int i = 0; i < colors.size(); i++)
 	{
-		rectangle(ui, Point(x, y), Point(x - size, y - size), colors[i], CV_FILLED, 8, 0);
 		xBounds.push_back(x);
-		x -= size; 
+		x -= size;
 	}
 	xBounds.push_back(x);
-	
-	x = (int)(WS - size * 1.5f);
 	yBounds.push_back(y);
 	yBounds.push_back(y - size);
+
+	x = (int)(WS - size * 1.5f);
 	y = HS - size * 4;
 	for (int i = 0; i < thicknesses.size(); i++)
 	{
 		yBounds.push_back(y);
+		int radius = size / (2 * (thicknesses[thicknesses.size() - 1] + 1 - thicknesses[i]));
+		y -= size + radius;
+	}
+}
+
+// Dessiner l'UI
+Mat drawUI(int WS, int HS, Scalar color, int thick)
+{
+	Mat ui;
+	if (doubleScreen)
+		ui = Mat(Size(WS, HS), CV_8UC4, black);
+	else
+		ui = Mat(Size(WS, HS), CV_8UC3, black);
+
+	if (!showUI)
+		return ui;
+
+	int size = (int)(WS / scaleUI);
+	int x = WS - size;
+	int y = HS - size;
+	for (int i = 0; i < colors.size(); i++)
+	{
+		rectangle(ui, Point(x, y), Point(x - size, y - size), colors[i], CV_FILLED);
+		x -= size; 
+	}
+	
+	x = (int)(WS - size * 1.5f);
+	y = HS - size * 4;
+	for (int i = 0; i < thicknesses.size(); i++)
+	{
 		int radius = size / (2 * (thicknesses[thicknesses.size() - 1] + 1 - thicknesses[i]));
 		circle(ui, Point(x, y), radius, color, -1, CV_AA);
 		if (thicknesses[i] == thick)
@@ -498,6 +504,21 @@ Mat drawUI(int WS, int HS, Scalar color, int thick, vector<int> &xBounds, vector
 	}
 
 	return ui;
+}
+
+// Fonction pour convertir les coordonées de caméra vers 
+// les coordonées locales de l'écran virtuel
+// centerDecalage: coordonnées du sommet en haut à gauche de l'écran dans l'espace du caméra
+// W & S : dimensions de l'écran perçues par la caméra (normalement plus petites que W & S)
+// WS & HS : résolution réelle de l'écran 
+Point convertCoord(Point p, CalibrationData calibr)
+{
+	Point temp = p - calibr.centerDecalage;
+	int x = cvRound(temp.x * calibr.WS * 1.0 / (double)calibr.W);
+	x = x > 0 ? x : 0;
+	int y = cvRound(temp.y * calibr.HS * 1.0 / (double)calibr.H);
+	y = y > 0 ? y : 0;
+	return Point(x, y);
 }
 
 //This function returns the square of the euclidean distance between 2 points.

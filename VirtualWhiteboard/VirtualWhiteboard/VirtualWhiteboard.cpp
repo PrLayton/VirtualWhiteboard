@@ -219,8 +219,8 @@ int Detection()
 		if (centers.size() == 2)
 		{
 			centerDecalage = centers[0].y < centers[1].y ? centers[0] : centers[1];
-			W = centers[0].x > centers[1].x ? centers[0].x - centers[1].x : centers[1].x - centers[0].x;
-			H = centers[0].y > centers[1].y ? centers[0].y - centers[1].y : centers[1].y - centers[0].y;
+			W = abs(centers[0].x - centers[1].x);
+			H = abs(centers[0].y - centers[1].y);
 		}
 		//inRange(hsv_frame, Scalar(100, 100, 90), Scalar(130, 255, 255), thresholdedFinal);
 		inRange(hsv_frame, Scalar(30, 50, 50), Scalar(70, 255, 255), thresholdedFinal);
@@ -375,6 +375,11 @@ int Detection()
 	return 0;
 }
 
+// Fonction pour convertir les coordonées de caméra vers 
+// les coordonées locales de l'écran virtuel
+// centerDecalage: coordonnées du sommet en haut à gauche de l'écran dans l'espace du caméra
+// W & S : dimensions de l'écran perçues par la caméra (normalement plus petites que W & S)
+// WS & HS : résolution réelle de l'écran
 Point convertCoord(Point p, Point decalage, int W, int H, int WS, int HS)
 {
 	Point temp = p - decalage;

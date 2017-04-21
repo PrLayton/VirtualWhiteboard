@@ -21,7 +21,8 @@ using namespace std;
 
 // Source de webCam: interne = 0, externe = 1
 #define SOURCE 0
-#define doubleScreen false
+#define doubleScreen 0
+#define alternativeMethod 1
 
 vector<Point> DetectScreen(Mat image, vector<Point> &lastCenters, double minDist);
 Point convertCoord(Point p, Point decalage, int WC, int HC, int WS, int HS);
