@@ -97,29 +97,20 @@ int DetectionUI()
 
 	int cmpt = 0;
 	auto sum = 0;
+	auto t1 = high_resolution_clock::now();
+	auto t2 = high_resolution_clock::now();
 	while (1)
 	{
+		t1 = high_resolution_clock::now();
 		Mat screen;
 		// Capture d'écran
-		auto t1 = high_resolution_clock::now();
 		if (doubleScreen)
 			//monitor >> screen;
 			monitor.capture(screen);
-		auto t2 = high_resolution_clock::now();
 		
 		// Capture d'un frame de caméra
 		cap.read(frame);
 		
-		auto duration = duration_cast<microseconds>(t2 - t1).count();
-		sum += duration;
-		cmpt++;
-		if (cmpt == 20)
-		{
-			cout << sum / cmpt << endl;
-			cmpt = 0;
-			sum = 0;
-		}
-
 		if (frame.empty())
 		{
 			fprintf(stderr, "ERROR: frame is null...\n");
@@ -147,16 +138,10 @@ int DetectionUI()
 				continue;
 		}
 
-		/*Mat tmpMat;
-		cvtColor(frame, tmpMat, CV_BGR2HSV);
-		inRange(tmpMat, Scalar(30, 100, 100), Scalar(70, 255, 255), green_hue_image);
-		rectangle(green_hue_image, calibrData.p1, calibrData.p2, color, 2, 8, 0);
-		// Debug de la calibration
-		imshow("GREEN Image", green_hue_image);*/
-
-		////// DETECTION DE DEPLACEMENT
+		////// DETECTION DE DEPLACEMENT - 150ms
 		if (!alternativeMethod) 
 		{	
+			t1 = high_resolution_clock::now();
 			vector<vector<Point> > contours;
 			cv::cvtColor(frame1, grayImage1, COLOR_BGR2GRAY);
 			// cpoie de la seconde frame
@@ -255,28 +240,30 @@ int DetectionUI()
 				pt = Point(-1, -1);
 				lastPoint = Point(-1, -1);
 			}
-
+			t2 = high_resolution_clock::now();
 			//imshow("Frame", frame);
 			imshow("Move detection", thresholdImage);
 			imshow("Color skin detection", fore);
 		}
+		// DECTECTION PAR TRACKER COULEUR - STICKER - 60ms
 		else
 		{
-			// DECTECTION PAR TRACKER VERT - STICKER
 			// HSV plus facile à traiter
-			cvtColor(frame, hsv_frame, CV_BGR2HSV);
+			cvtColor(frame, hsv_frame, CV_BGR2HSV); // 4ms
 			// Pour le grain
-			medianBlur(hsv_frame, hsv_frame, 3);
-
+			medianBlur(hsv_frame, hsv_frame, 3);	// 30ms
+			// 2ms
 			//inRange(hsv_frame, Scalar(40, 90, 150), Scalar(90, 255, 255), thresholdedFinal); // VERT
 			inRange(hsv_frame, Scalar(160, 100, 100), Scalar(179, 255, 255), thresholdedFinal); // ROSE
-
-			GaussianBlur(thresholdedFinal, thresholdedFinal, Size(9, 9), 2, 2);
+			
+			GaussianBlur(thresholdedFinal, thresholdedFinal, Size(9, 9), 2, 2); // 10ms
+			
 			imshow("FILTRE", thresholdedFinal);
 			// Stockage des points de reconnaissance
 			vector<Vec3f> storage;
+			// 5ms
 			HoughCircles(thresholdedFinal, storage, CV_HOUGH_GRADIENT, 2, thresholdedFinal.rows / 4, 100, 60, 10, 400);
-
+			
 			// traitement des points détectés
 			if (storage.size() >= 1)
 			{
@@ -284,13 +271,13 @@ int DetectionUI()
 				for (k = 0; k < storage.size(); k++)
 					if (storage[k][2] >= 50)
 						break;
-				if (k >= storage.size())
-					continue;
-				//cout << "RADIUS = " << storage[k][2] << endl;
-				Vec3f p = storage[k];
-				pt = Point(cvRound(p[0]), cvRound(p[1]));
-				//pt = convertCoord(pt, calibrData);
-				circle(frame, pt, cvRound(p[2]), red);
+				if (k < storage.size())
+				{
+					Vec3f p = storage[k];
+					pt = Point(cvRound(p[0]), cvRound(p[1]));
+					pt = convertCoord(pt, calibrData);
+					circle(frame, pt, cvRound(p[2]), red);
+				}
 			}
 			else
 			{
@@ -298,7 +285,8 @@ int DetectionUI()
 				lastPoint = Point(-1, -1);
 			}
 		}
-
+		
+		// 5µs
 		if (pt.x > 0 && pt.y > 0)
 		{
 			// Détection de l'UI des couleurs
@@ -333,22 +321,22 @@ int DetectionUI()
 
 		if (doubleScreen)
 		{
-			add(screen, drawing, screen);
+			add(screen, drawing, screen); // 1ms
 			add(screen, ui, screen);
 			cvNamedWindow("ECRAN VIRTUEL", CV_WINDOW_NORMAL);
 			cvSetWindowProperty("ECRAN VIRTUEL", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
 			cvMoveWindow("ECRAN VIRTUEL", -WS, 0);
-			imshow("ECRAN VIRTUEL", screen);
+			imshow("ECRAN VIRTUEL", screen); // 8ms
 		}
 		else
 		{
 			add(frame, drawing, frame);
 			add(frame, ui, frame);
 		}
+		
 		imshow("Camera", frame);
-
-		// LE SWITCH DOIT ETRE ICI POUR QUE LA BOUCLE WHILE FONCTIONNE
-		switch (waitKey(10))
+		
+		switch (waitKey(1)) // 10ms
 		{
 		case 27: //'esc' key has been pressed, exit program.
 			return 0;
@@ -384,7 +372,16 @@ int DetectionUI()
 			drawing = black;
 			break;
 		}
-
+		t2 = high_resolution_clock::now();
+		auto duration = duration_cast<microseconds>(t2 - t1).count();
+		sum += duration;
+		cmpt++;
+		if (cmpt == 20)
+		{
+			cout << sum / cmpt << endl;
+			cmpt = 0;
+			sum = 0;
+		}
 	}
 
 	cvDestroyAllWindows();
@@ -513,7 +510,7 @@ bool Calibrate(CalibrationData &cd, Mat camFrame)
 	imshow("cameraCalib", camFrame);
 	imshow("calib", green_hue_image);
 
-	switch (waitKey(10))
+	switch (waitKey(1))
 	{
 	case 99: // 'c' : confirmer calibration ok
 		cvDestroyWindow("cameraCalib");
