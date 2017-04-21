@@ -9,6 +9,5 @@
 
 
 double dist(Point x, Point y);
-pair<Point, double> circleFromPoints(Point p1, Point p2, Point p3);
 Mat drawUI(int WS, int HS, Scalar color, int thick, vector<int> &xBounds, vector<int> &yBounds);
 int DetectionUI();

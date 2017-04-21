@@ -16,12 +16,13 @@ bool showUI = false;
 
 struct cabibrationData 
 {
-	int WS = 1600, HS = 900;
-	int W = 1, H = 1;
+	int WS = 1920, HS = 1080;
+	int W = 0, H = 0;
 	Point centerDecalage = Point(0,0);
 	Point2i p1 = Point(0, 0), p2 = Point(0, 0);
 };
 
+// Calibration de la camera par rapport à l'écran
 bool Calibrate(cabibrationData *cd, Mat camFrame) 
 {
 	Mat green_hue_image;
@@ -39,41 +40,46 @@ bool Calibrate(cabibrationData *cd, Mat camFrame)
 
 	// Contours
 	Canny(green_hue_image, green_hue_image, 100, 100 * 2, 3);
-	// Find contours
+	// Detection de contours
 	findContours(green_hue_image, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
 
-	// Approximate contours to polygons + get bounding rects
 	vector<vector<Point> > contours_poly(contours.size());
 	vector<Rect> boundRect(contours.size());
 
-	// Enveloppe convexe
 	for (int i = 0; i < contours.size(); i++)
 	{
+		// Approximatrion en une géometrie
 		approxPolyDP(Mat(contours[i]), contours_poly[i], 3, true);
+		// Enveloppe convexe
 		boundRect[i] = boundingRect(Mat(contours_poly[i]));
 	}
 
-	// Draw polygonal contour + bonding rects
+	// Detection de l'enveloppe la plus grosse
 	int maxcontour = 0, maxcontourIndex = 0;
 	for (int i = 0; i < contours.size(); i++) 
 	{
+		// Taille du contour
 		if (contourArea(contours[i]) > maxcontour) 
 		{
 			maxcontour = contourArea(contours[i]);
 			maxcontourIndex = i;
 		}
 	}
+
+	// Dessin des enveloppes
 	if (contours.size() > 0 && maxcontour > 10) 
 	{
+		// Dessin en blanc des contours bruts
 		Scalar color = Scalar(255, 255, 255);
 		drawContours(green_hue_image, contours_poly, maxcontourIndex, color, 1, 8, vector<Vec4i>(), 0, Point());
-		// Plusieurs detectes, on prend que le premier
 		//rectangle(green_hue_image, boundRect[maxcontourIndex].tl(), boundRect[maxcontourIndex].br(), color, 2, 8, 0);
+		// Enregistrement des coins pour dessin
 		cd->p1 = boundRect[maxcontourIndex].tl();
 		cd->p2 = boundRect[maxcontourIndex].br();
 		centers.push_back(boundRect[maxcontourIndex].tl());
 		centers.push_back(boundRect[maxcontourIndex].br());
 
+		// Calcul du décalage 
 		cd->centerDecalage = centers[0].y < centers[1].y ? centers[0] : centers[1];
 		cd->W = centers[0].x > centers[1].x ? centers[0].x - centers[1].x : centers[1].x - centers[0].x;
 		cd->H = centers[0].y > centers[1].y ? centers[0].y - centers[1].y : centers[1].y - centers[0].y;
@@ -108,6 +114,7 @@ int DetectionUI()
 	VideoCapture cap(SOURCE); //capture the video from webcam
 	ScreenCapture mainWindow(0);
 	ScreenCapture monitor(1);
+
 	if (!cap.isOpened())  // if not success, exit program
 	{
 		cout << "Cannot open the webcam" << endl;
@@ -119,11 +126,11 @@ int DetectionUI()
 	// Taille écran virtuel
 	int WS = -1, HS = -1;
 
-	// Tend au maximum
+	// Tend au maximum/résolution forcée
 	cap.set(CV_CAP_PROP_FRAME_WIDTH, WC);
 	cap.set(CV_CAP_PROP_FRAME_HEIGHT, HC);
 
-	// Ecran de dessin - NOIR
+	// Defintion de la taille de l'ecran
 	Mat drawing;
 	if (doubleScreen)
 	{
@@ -137,6 +144,7 @@ int DetectionUI()
 		HS = HC;
 		drawing = Mat(Size(WS, HS), CV_8UC3);
 	}
+	// Ecran de dessin - NOIR
 	drawing = black;
 	
 	// Couleur de dessin - éléments de l'UI
@@ -145,17 +153,13 @@ int DetectionUI()
 	vector<int> xBounds, yBounds;
 	Mat ui = drawUI(WS, HS, color, thickness, xBounds, yBounds);
 	int size = (int)(WS / scaleUI);
-	int confirm_choice_frames = 10;
 
-	Mat  thresholdedFinal;
+	Mat thresholdedFinal;
 	Mat frame;
 	Mat fore;
-	vector<pair<Point, double> > palm_centers;
-
-	int backgroundFrame = 500;
 
 	Mat  hsv_frame;
-	cv::Vec3b pixel = cv::Vec3b(30, 120, 120);
+	cv::Vec3b pixelsColor = cv::Vec3b(30, 120, 120);
 
 	Mat frame1, frame2;
 	//their grayscale images (needed for absdiff() function)
@@ -170,10 +174,17 @@ int DetectionUI()
 	bool detected = true;
 	Point pt = Point(-1, -1), lastPoint = Point(-1, -1);
 
-	cap.read(frame1);
-
 	Mat calibScreen(Size(WS, HS), CV_8UC3);
 	calibScreen = green;
+	bool alternativeMethod = false;
+
+	cap.read(frame1);
+
+	// Pour controler la detection de la peau
+	/*namedWindow("Control", CV_WINDOW_AUTOSIZE);
+	int iLowH = 0, iLowW = 0;
+	createTrackbar("LowH", "Control", &iLowH, 255);
+	createTrackbar("LowW", "Control", &iLowW, 255);*/
 
 	while (1)
 	{
@@ -212,145 +223,149 @@ int DetectionUI()
 		cvtColor(frame, tmpMat, CV_BGR2HSV);
 		inRange(tmpMat, Scalar(30, 100, 100), Scalar(70, 255, 255), green_hue_image);
 		rectangle(green_hue_image, calibrData.p1, calibrData.p2, color, 2, 8, 0);
-		// Debug
+		// Debug de la calibration
 		imshow("GREEN Image", green_hue_image);
 
-		vector<vector<Point> > contours;
+		if (!alternativeMethod) {
+			////// DETECTION DE DEPLACEMENT
+			vector<vector<Point> > contours;
+			cv::cvtColor(frame1, grayImage1, COLOR_BGR2GRAY);
+			// cpoie de la seconde frame
+			cap.read(frame2);
+			// conversion en niveau de gris
+			cv::cvtColor(frame2, grayImage2, COLOR_BGR2GRAY);
+			// construit une image qui represente in niveau d'intensité
+			cv::absdiff(grayImage1, grayImage2, differenceImage);
+			// seuil l'image avec un niveau d'intensité
+			cv::threshold(differenceImage, thresholdImage, 20, 255, THRESH_BINARY);
 
-		//------------ Detection de déplacement		
-		/*
-		////// DETECTION DE DEPLACEMENT
-		vector<vector<Point> > contours;
->>>>>>> ab9ccfd55bd099d25d02475a971c935dc31089dd
-		//convert frame1 to gray scale for frame differencing
-		cv::cvtColor(frame1, grayImage1, COLOR_BGR2GRAY);
-		//copy second frame
-		cap.read(frame2);
-		//convert frame2 to gray scale for frame differencing
-		cv::cvtColor(frame2, grayImage2, COLOR_BGR2GRAY);
-		//perform frame differencing with the sequential images. This will output an "intensity image"
-		//do not confuse this with a threshold image, we will need to perform thresholding afterwards.
-		cv::absdiff(grayImage1, grayImage2, differenceImage);
-		//threshold intensity image at a given sensitivity value
-		cv::threshold(differenceImage, thresholdImage, 20, 255, THRESH_BINARY);
+			Mat copy;
+			//bitwise_not(thresholdImage, thresholdImage);
+			frame.copyTo(copy, thresholdImage);
+			//hsv_frame = dst2;
 
-		Mat copy;
-		//bitwise_not(thresholdImage, thresholdImage);
-		frame.copyTo(copy, thresholdImage);
-		//hsv_frame = dst2;
+			// Pour le grain
+			//medianBlur(frame, frame, 3);
+			// HSV plus facile à traiter
+			cvtColor(copy, hsv_frame, CV_BGR2HSV);
+			//inRange(hsv_frame, Scalar(20, 100, 100), Scalar(60, 255, 255), fore);
+			//inRange(hsv_frame, Scalar(112, 0, 100), Scalar(152, 100, 255), fore);
 
-		// Pour le grain
-		//medianBlur(frame, frame, 3);
-		// HSV plus facile à traiter
-		cvtColor(copy, hsv_frame, CV_BGR2HSV);
-		//inRange(hsv_frame, Scalar(20, 100, 100), Scalar(60, 255, 255), fore);
-		//inRange(hsv_frame, Scalar(112, 0, 100), Scalar(152, 100, 255), fore);
+			inRange(hsv_frame, Scalar(max(0, pixelsColor[0] - 20), max(0, pixelsColor[1] - 100), max(0, pixelsColor[2] - 100)), Scalar(min(255, pixelsColor[0] + 20), min(255, pixelsColor[1] + 100), min(255, pixelsColor[2] + 100)), fore);
 
-		inRange(hsv_frame, Scalar(max(0, pixel[0] - 20), max(0, pixel[1] - 60), max(0, pixel[2] - 60)), Scalar(min(255, pixel[0] + 20), min(255, pixel[1] + 60), min(255, pixel[2] + 60)), fore);
+			// Mettre en valeur les lignes et retirer du bruit
+			erode(fore, fore, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+			dilate(fore, fore, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+			dilate(fore, fore, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+			erode(fore, fore, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+			GaussianBlur(fore, fore, Size(5, 5), 0, 0);
 
-
-		//Enhance edges in the foreground by applying erosion and dilation
-		erode(fore, fore, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-		dilate(fore, fore, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-		dilate(fore, fore, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-		erode(fore, fore, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-		GaussianBlur(fore, fore, Size(5, 5), 0, 0);
-
-
-		//Find the contours in the foreground
-		findContours(fore, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
-		int maxcontour = 0, maxcontourIndex = 0;
-		for (int i = 0; i < contours.size(); i++) 
-		{
-			if (contourArea(contours[i]) > maxcontour) 
+			// Trouver les contours les plus importants
+			// Sans hierarchie, sans compression
+			findContours(fore, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+			int maxcontour = 0, maxcontourIndex = 0;
+			for (int i = 0; i < contours.size(); i++)
 			{
-				maxcontour = contourArea(contours[i]);
-				maxcontourIndex = i;
-			}
-		}
-
-		int index = maxcontourIndex;
-		if (contours.size()> 0 && contourArea(contours[index]) >= 500) 
-		{
-			//Draw contour
-			vector<vector<Point> > tcontours;
-			tcontours.push_back(contours[index]);
-			//drawContours(frame, tcontours, -1, cv::Scalar(0, 0, 255), 2);
-
-			//Detect Hull in current contour
-			vector<vector<Point> > hulls(1);
-			vector<vector<int> > hullsI(1);
-			convexHull(Mat(tcontours[0]), hulls[0], false);
-			convexHull(Mat(tcontours[0]), hullsI[0], false);
-			drawContours(frame, hulls, -1, cv::Scalar(0, 255, 0), 2);
-
-			//Find minimum area rectangle to enclose hand
-			RotatedRect rect = minAreaRect(Mat(tcontours[0]));
-
-			//Find Convex Defects
-			vector<Vec4i> defects;
-			if (hullsI[0].size() > 0)
-			{
-				Point2f rect_points[4]; rect.points(rect_points);
-
-				Point2f p;
-				for (int j = 0; j < 4; j++)
-					p += rect_points[j];
-				p /= 4;
-				circle(frame, p, 5, Scalar(255, 255, 255), 5);
-				pt = Point(cvRound(p.x), cvRound(p.y));
-				//pt = _convertCoord(pt, calibrData.centerDecalage, calibrData.W, calibrData.H, calibrData.WS, calibrData.HS);
-
-				for (int j = 0; j < 4; j++)
-					line(frame, rect_points[j], rect_points[(j + 1) % 4], Scalar(255, 0, 0), 1, 8);
+				if (contourArea(contours[i]) > maxcontour)
+				{
+					maxcontour = contourArea(contours[i]);
+					maxcontourIndex = i;
+				}
 			}
 
+			int index = maxcontourIndex;
+			if (contours.size()> 0 && contourArea(contours[index]) >= 500)
+			{
+				Mat contoursMat(contours[index]);
+
+				// Enveloppe convexe du contour sous forme de points
+				vector<vector<Point>> hulls(1);
+				convexHull(contoursMat, hulls[0], false);
+				// Dessine tous les contours
+				drawContours(frame, hulls, -1, cv::Scalar(0, 255, 0), 2);
+
+				// Enveloppe convexe du contour
+				/*vector<vector<Point> > hulls(1);
+				vector<vector<int> > hullsI(1);
+				convexHull(Mat(tcontours[0]), hulls[0], false);
+				convexHull(Mat(tcontours[0]), hullsI[0], false);
+				drawContours(frame, hulls, -1, cv::Scalar(0, 255, 0), 2);*/
+
+				// Rectangle englobant minimum
+				RotatedRect rect = minAreaRect(contoursMat);
+
+				if (hulls.size() > 0)
+				{
+					// Rectangle englobant
+					Point2f rect_points[4]; rect.points(rect_points);
+					// Coordonnées du centre du rectangle englobant
+					Point2f p;
+					for (int j = 0; j < 4; j++)
+						p += rect_points[j];
+					p /= 4;
+					// Dessin
+					circle(frame, p, 5, Scalar(255, 255, 255), 5);
+					// Conversion
+					pt = Point(cvRound(p.x), cvRound(p.y));
+					//pt = _convertCoord(pt, calibrData.centerDecalage, calibrData.W, calibrData.H, calibrData.WS, calibrData.HS);
+
+					// Dessin du rectangle
+					for (int j = 0; j < 4; j++)
+						line(frame, rect_points[j], rect_points[(j + 1) % 4], Scalar(255, 0, 0), 1, 8);
+				}
+				else
+				{
+					pt = Point(-1, -1);
+					lastPoint = Point(-1, -1);
+				}
+
+			}
+			else
+			{
+				pt = Point(-1, -1);
+				lastPoint = Point(-1, -1);
+			}
+
+			//imshow("Frame", frame);
+			imshow("Move detection", thresholdImage);
+			imshow("Color skin detection", fore);
 		}
-		
-		//imshow("Frame", frame);
-		imshow("Background", fore);
-		imshow("thresholdImage", thresholdImage);
-		*/
-		
-		// DECTECTION PAR TRACKER VERT - STICKER
-		// HSV plus facile à traiter
-		cvtColor(frame, hsv_frame, CV_BGR2HSV);
-		// Pour le grain
-		medianBlur(hsv_frame, hsv_frame, 3);
-
-		//inRange(hsv_frame, Scalar(40, 90, 150), Scalar(90, 255, 255), thresholdedFinal); // VERT
-		inRange(hsv_frame, Scalar(150, 125, 0), Scalar(179, 255, 255), thresholdedFinal); // ROUGE
-
-		// Amélioration de la qualité du résultat
-		//erode(thresholdedFinal, thresholdedFinal, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-		//dilate(thresholdedFinal, thresholdedFinal, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-		//dilate(thresholdedFinal, thresholdedFinal, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-		//erode(thresholdedFinal, thresholdedFinal, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-
-		GaussianBlur(thresholdedFinal, thresholdedFinal, Size(9, 9), 2, 2);
-		imshow("FILTRE", thresholdedFinal);
-		// Stockage des points de reconnaissance
-		vector<Vec3f> storage;
-		HoughCircles(thresholdedFinal, storage, CV_HOUGH_GRADIENT, 2, thresholdedFinal.rows / 4, 100, 60, 10, 400);
-
-		// traitement des points détectés
-		if (storage.size() >= 1)
+		else 
 		{
-			int k = 0;
-			for (k = 0; k < storage.size(); k++)
-				if (storage[k][2] >= 50)
-					break;
-			if (k >= storage.size())
-				continue;
-			//cout << "RADIUS = " << storage[k][2] << endl;
-			Vec3f p = storage[k];
-			pt = Point(cvRound(p[0]), cvRound(p[1]));
-			circle(frame, pt, cvRound(p[2]), red);
-		}
-		else
-		{
-			pt = Point(-1, -1);
-			lastPoint = Point(-1, -1);
+			// DECTECTION PAR TRACKER VERT - STICKER
+			// HSV plus facile à traiter
+			cvtColor(frame, hsv_frame, CV_BGR2HSV);
+			// Pour le grain
+			medianBlur(hsv_frame, hsv_frame, 3);
+
+			//inRange(hsv_frame, Scalar(40, 90, 150), Scalar(90, 255, 255), thresholdedFinal); // VERT
+			inRange(hsv_frame, Scalar(150, 125, 0), Scalar(179, 255, 255), thresholdedFinal); // ROUGE
+
+			GaussianBlur(thresholdedFinal, thresholdedFinal, Size(9, 9), 2, 2);
+			imshow("FILTRE", thresholdedFinal);
+			// Stockage des points de reconnaissance
+			vector<Vec3f> storage;
+			HoughCircles(thresholdedFinal, storage, CV_HOUGH_GRADIENT, 2, thresholdedFinal.rows / 4, 100, 60, 10, 400);
+
+			// traitement des points détectés
+			if (storage.size() >= 1)
+			{
+				int k = 0;
+				for (k = 0; k < storage.size(); k++)
+					if (storage[k][2] >= 50)
+						break;
+				if (k >= storage.size())
+					continue;
+				//cout << "RADIUS = " << storage[k][2] << endl;
+				Vec3f p = storage[k];
+				pt = Point(cvRound(p[0]), cvRound(p[1]));
+				circle(frame, pt, cvRound(p[2]), red);
+			}
+			else
+			{
+				pt = Point(-1, -1);
+				lastPoint = Point(-1, -1);
+			}
 		}
 
 		if (pt.x > 0 && pt.y > 0)
@@ -435,7 +450,7 @@ int DetectionUI()
 					v += tmppixel[2];
 				}
 			}
-			pixel = cv::Vec3b(h / 16, s / 16, v / 16);
+			pixelsColor = cv::Vec3b(h / 16, s / 16, v / 16);
 			cout << h / 16 << " " << s / 16 << " " << v / 16 << endl;
 			drawing = black;
 			break;
@@ -489,24 +504,4 @@ Mat drawUI(int WS, int HS, Scalar color, int thick, vector<int> &xBounds, vector
 double dist(Point x, Point y)
 {
 	return (x.x - y.x)*(x.x - y.x) + (x.y - y.y)*(x.y - y.y);
-}
-
-
-//This function returns the radius and the center of the circle given 3 points
-//If a circle cannot be formed , it returns a zero radius circle centered at (0,0)
-pair<Point, double> circleFromPoints(Point p1, Point p2, Point p3)
-{
-	double offset = pow(p2.x, 2) + pow(p2.y, 2);
-	double bc = (pow(p1.x, 2) + pow(p1.y, 2) - offset) / 2.0;
-	double cd = (offset - pow(p3.x, 2) - pow(p3.y, 2)) / 2.0;
-	double det = (p1.x - p2.x) * (p2.y - p3.y) - (p2.x - p3.x)* (p1.y - p2.y);
-	double TOL = 0.0000001;
-	if (abs(det) < TOL) { cout << "POINTS TOO CLOSE" << endl; return make_pair(Point(0, 0), 0); }
-
-	double idet = 1 / det;
-	double centerx = (bc * (p2.y - p3.y) - cd * (p1.y - p2.y)) * idet;
-	double centery = (cd * (p1.x - p2.x) - bc * (p2.x - p3.x)) * idet;
-	double radius = sqrt(pow(p2.x - centerx, 2) + pow(p2.y - centery, 2));
-
-	return make_pair(Point(centerx, centery), radius);
 }
