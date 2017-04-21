@@ -106,7 +106,7 @@ int DetectionUI()
 	}
 
 	// Résolution camera
-	int WC = 640, HC = 480;
+	int WC = 800, HC = 600;
 	// Résolution écran virtuel
 	int WS = -1, HS = -1;
 
@@ -164,10 +164,11 @@ int DetectionUI()
 	cap.read(frame1);
 
 	// Pour controler la detection de la peau
-	/*namedWindow("Control", CV_WINDOW_AUTOSIZE);
-	int iLowH = 0, iLowW = 0;
+	namedWindow("Control", CV_WINDOW_AUTOSIZE);
+	int iLowH = 30, iLowW = 70;
+	//int iLowH = 10, iLowW = 50;
 	createTrackbar("LowH", "Control", &iLowH, 255);
-	createTrackbar("LowW", "Control", &iLowW, 255);*/
+	createTrackbar("LowW", "Control", &iLowW, 255);
 
 	while (1)
 	{
@@ -234,13 +235,17 @@ int DetectionUI()
 			//inRange(hsv_frame, Scalar(20, 100, 100), Scalar(60, 255, 255), fore);
 			//inRange(hsv_frame, Scalar(112, 0, 100), Scalar(152, 100, 255), fore);
 
-			inRange(hsv_frame, Scalar(max(0, pixelsColor[0] - 20), max(0, pixelsColor[1] - 100), max(0, pixelsColor[2] - 100)), Scalar(min(255, pixelsColor[0] + 20), min(255, pixelsColor[1] + 100), min(255, pixelsColor[2] + 100)), fore);
+			inRange(hsv_frame, Scalar(max(0, pixelsColor[0] - iLowH), max(0, pixelsColor[1] - iLowW), max(0, pixelsColor[2] - iLowW)), Scalar(min(255, pixelsColor[0] + iLowH), min(255, pixelsColor[1] + iLowW), min(255, pixelsColor[2] + iLowW)), fore);
 
 			// Mettre en valeur les lignes et retirer du bruit
 			erode(fore, fore, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 			dilate(fore, fore, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 			dilate(fore, fore, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 			erode(fore, fore, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+			/*erode(fore, fore, getStructuringElement(MORPH_RECT, Size(3, 3)));
+			erode(fore, fore, getStructuringElement(MORPH_RECT, Size(3, 3)));
+			dilate(fore, fore, getStructuringElement(MORPH_RECT, Size(5, 5)));
+			dilate(fore, fore, getStructuringElement(MORPH_RECT, Size(5, 5)));*/
 			GaussianBlur(fore, fore, Size(5, 5), 0, 0);
 
 			// Trouver les contours les plus importants
@@ -301,7 +306,6 @@ int DetectionUI()
 					pt = Point(-1, -1);
 					lastPoint = Point(-1, -1);
 				}
-
 			}
 			else
 			{
