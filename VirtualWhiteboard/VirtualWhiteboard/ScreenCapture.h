@@ -12,6 +12,7 @@ public:
 	void open(int displayIndex);
 	void read(cv::Mat& destination);
 	ScreenCapture& operator >> (cv::Mat& destination);
+	void capture(cv::Mat& dest);
 
 	int width;
 	int height;

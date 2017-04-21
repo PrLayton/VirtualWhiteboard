@@ -1,79 +1,14 @@
 #include "stdafx.h"
 
 #include <Windows.h>
+#include <chrono>
 #include "VirtualWhiteboard.h"
 #include "Interface.h"
 #include "ScreenCapture.h"
 
 using namespace std;
+using namespace std::chrono;
 using namespace cv;
-
-bool Calibrate(CalibrationData &cd, Mat camFrame) 
-{
-	Mat green_hue_image;
-	cvtColor(camFrame, green_hue_image, CV_BGR2HSV);
-	inRange(green_hue_image, Scalar(30, 100, 100), Scalar(70, 255, 255), green_hue_image);
-
-	vector<Point> centers;
-	vector<vector<Point> > contours;
-	vector<Vec4i> hierarchy;
-
-	erode(green_hue_image, green_hue_image, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-	dilate(green_hue_image, green_hue_image, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-	dilate(green_hue_image, green_hue_image, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-	erode(green_hue_image, green_hue_image, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-
-	// Contours
-	Canny(green_hue_image, green_hue_image, 100, 100 * 2, 3);
-	// Find contours
-	findContours(green_hue_image, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
-
-	// Approximate contours to polygons + get bounding rects
-	vector<vector<Point> > contours_poly(contours.size());
-	vector<Rect> boundRect(contours.size());
-
-	// Enveloppe convexe
-	for (int i = 0; i < contours.size(); i++)
-	{
-		approxPolyDP(Mat(contours[i]), contours_poly[i], 3, true);
-		boundRect[i] = boundingRect(Mat(contours_poly[i]));
-	}
-
-	// Draw polygonal contour + bonding rects
-	int maxcontour = 0, maxcontourIndex = 0;
-	for (int i = 0; i < contours.size(); i++) 
-	{
-		if (contourArea(contours[i]) > maxcontour) 
-		{
-			maxcontour = contourArea(contours[i]);
-			maxcontourIndex = i;
-		}
-	}
-	if (contours.size() > 0 && maxcontour > 10) 
-	{
-		cd.p1 = boundRect[maxcontourIndex].tl();
-		cd.p2 = boundRect[maxcontourIndex].br();
-		centers.push_back(boundRect[maxcontourIndex].tl());
-		centers.push_back(boundRect[maxcontourIndex].br());
-		cd.centerDecalage = centers[0].y < centers[1].y ? centers[0] : centers[1];
-		cd.W = abs(centers[0].x - centers[1].x);
-		cd.H = abs(centers[0].y - centers[1].y);
-		drawContours(green_hue_image, contours_poly, maxcontourIndex, white, 1, 8, vector<Vec4i>(), 0);
-		rectangle(camFrame, cd.p1, cd.p2, red, 2);
-	}
-	// Fenêtre pour confirmer la bonne calibration
-	imshow("cameraCalib", camFrame);
-	imshow("calib", green_hue_image);
-
-	switch (waitKey(10))
-	{
-	case 99: // 'c' : confirmer calibration ok
-		cvDestroyWindow("cameraCalib");
-		cvDestroyWindow("calib");
-		return true;
-	}
-	return false;
-}
 
 // Eléments de l'UI
 vector<Scalar> colors = { red, green, blue, white };
@@ -94,7 +29,7 @@ int DetectionUI()
 	}
 
 	// Résolution camera
-	int WC = 640, HC = 480;
+	int WC = 800, HC = 600;
 	// Résolution écran virtuel
 	int WS = -1, HS = -1;
 
@@ -153,14 +88,31 @@ int DetectionUI()
 
 	Mat calibScreen(Size(WS, HS), CV_8UC3);
 	calibScreen = green;
-
+	int count = 0;
+	auto sum = 0;
 	while (1)
 	{
 		Mat screen;
+		// Capture d'écran
+		auto t1 = high_resolution_clock::now();
 		if (doubleScreen)
-			monitor >> screen;
+			//monitor >> screen;
+			monitor.capture(screen);
+		auto t2 = high_resolution_clock::now();
 		
+		// Capture d'un frame de caméra
 		cap.read(frame);
+		
+		auto duration = duration_cast<microseconds>(t2 - t1).count();
+		sum += duration;
+		count++;
+		if (count == 20)
+		{
+			cout << sum / count << endl;
+			count = 0;
+			sum = 0;
+		}
+
 		if (frame.empty())
 		{
 			fprintf(stderr, "ERROR: frame is null...\n");
@@ -180,7 +132,8 @@ int DetectionUI()
 
 			calibrData.HS = HS;
 			calibrData.WS = WS;
-			detected = Calibrate(calibrData, frame);
+			
+			detected = Calibrate(calibrData, frame); 
 			if (detected == true) 
 				cvDestroyWindow("ECRAN CALIBRATION");
 			else
@@ -194,13 +147,11 @@ int DetectionUI()
 		// Debug
 		imshow("GREEN Image", green_hue_image);*/
 
-		vector<vector<Point> > contours;
 
 		//------------ Detection de déplacement		
 		/*
 		////// DETECTION DE DEPLACEMENT
 		vector<vector<Point> > contours;
->>>>>>> ab9ccfd55bd099d25d02475a971c935dc31089dd
 		//convert frame1 to gray scale for frame differencing
 		cv::cvtColor(frame1, grayImage1, COLOR_BGR2GRAY);
 		//copy second frame
@@ -485,6 +436,76 @@ Mat drawUI(int WS, int HS, Scalar color, int thick)
 	}
 
 	return ui;
+}
+
+// Calibration de l'écran virtuel
+bool Calibrate(CalibrationData &cd, Mat camFrame)
+{
+	Mat green_hue_image;
+	cvtColor(camFrame, green_hue_image, CV_BGR2HSV);
+	//inRange(green_hue_image, Scalar(30, 100, 100), Scalar(70, 255, 255), green_hue_image);
+	inRange(green_hue_image, Scalar(50, 100, 100), Scalar(80, 255, 255), green_hue_image);
+	//inRange(green_hue_image, Scalar(30, 100, 100), Scalar(70, 255, 255), green_hue_image);
+
+	vector<Point> centers;
+	vector<vector<Point> > contours;
+	vector<Vec4i> hierarchy;
+
+	erode(green_hue_image, green_hue_image, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	dilate(green_hue_image, green_hue_image, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	dilate(green_hue_image, green_hue_image, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	erode(green_hue_image, green_hue_image, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+
+	// Contours
+	Canny(green_hue_image, green_hue_image, 100, 100 * 2, 3);
+	// Find contours
+	findContours(green_hue_image, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
+
+	// Approximate contours to polygons + get bounding rects
+	vector<vector<Point> > contours_poly(contours.size());
+	vector<Rect> boundRect(contours.size());
+
+	// Enveloppe convexe
+	for (int i = 0; i < contours.size(); i++)
+	{
+		approxPolyDP(Mat(contours[i]), contours_poly[i], 3, true);
+		boundRect[i] = boundingRect(Mat(contours_poly[i]));
+	}
+
+	// Draw polygonal contour + bonding rects
+	int maxcontour = 0, maxcontourIndex = 0;
+	for (int i = 0; i < contours.size(); i++)
+	{
+		if (contourArea(contours[i]) > maxcontour)
+		{
+			maxcontour = contourArea(contours[i]);
+			maxcontourIndex = i;
+		}
+	}
+	if (contours.size() > 0 && maxcontour > 10)
+	{
+		cd.p1 = boundRect[maxcontourIndex].tl();
+		cd.p2 = boundRect[maxcontourIndex].br();
+		centers.push_back(boundRect[maxcontourIndex].tl());
+		centers.push_back(boundRect[maxcontourIndex].br());
+		cd.centerDecalage = centers[0].y < centers[1].y ? centers[0] : centers[1];
+		cd.W = abs(centers[0].x - centers[1].x);
+		cd.H = abs(centers[0].y - centers[1].y);
+		drawContours(green_hue_image, contours_poly, maxcontourIndex, white, 1, 8, vector<Vec4i>(), 0);
+		rectangle(camFrame, cd.p1, cd.p2, red, 2);
+	}
+	// Fenêtre pour confirmer la bonne calibration
+	imshow("cameraCalib", camFrame);
+	imshow("calib", green_hue_image);
+
+	switch (waitKey(10))
+	{
+	case 99: // 'c' : confirmer calibration ok
+		cvDestroyWindow("cameraCalib");
+		cvDestroyWindow("calib");
+		return true;
+	}
+	return false;
 }
 
 // Fonction pour convertir les coordonées de caméra vers 

@@ -33,10 +33,10 @@ void ScreenCapture::open(int displayIndex)
 	MonitorIndexLookupInfo enumState = { displayIndex, NULL, 0 };
 	EnumDisplayMonitors(NULL, NULL, monitorEnumProc, (LPARAM)&enumState);
 
-	this->captureArea = cv::Rect2d(enumState.outRect.left, enumState.outRect.top, enumState.outRect.right - enumState.outRect.left, enumState.outRect.bottom - enumState.outRect.top);
+	captureArea = cv::Rect2d(enumState.outRect.left, enumState.outRect.top, enumState.outRect.right - enumState.outRect.left, enumState.outRect.bottom - enumState.outRect.top);
 	width = captureArea.width;
 	height = captureArea.height;
-	this->targetWindow = GetDesktopWindow();
+	targetWindow = GetDesktopWindow();
 }
 
 BOOL CALLBACK ScreenCapture::monitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData)
@@ -68,6 +68,47 @@ ScreenCapture& ScreenCapture::operator >> (cv::Mat& destination)
 {
 	read(destination);
 	return *this;
+}
+
+void ScreenCapture::capture(cv::Mat& dest)
+{
+	HDC hwindowDC, hwindowCompatibleDC;
+
+	HBITMAP hbwindow;
+	BITMAPINFOHEADER  bi;
+
+	hwindowDC = GetDC(targetWindow);
+	hwindowCompatibleDC = CreateCompatibleDC(hwindowDC);
+	SetStretchBltMode(hwindowCompatibleDC, COLORONCOLOR);
+
+	dest.create(captureArea.height, captureArea.width, CV_8UC4);
+
+	// Initialize a bitmap
+	hbwindow = CreateCompatibleBitmap(hwindowDC, captureArea.width, captureArea.height);
+	bi.biSize = sizeof(BITMAPINFOHEADER);
+	bi.biWidth = captureArea.width;
+	// The negative height is required -- removing the inversion will make the image appear upside-down.
+	bi.biHeight = -captureArea.height;
+	bi.biPlanes = 1;
+	bi.biBitCount = 32;
+	bi.biCompression = BI_RGB;
+	bi.biSizeImage = 0;
+	bi.biXPelsPerMeter = 0;
+	bi.biYPelsPerMeter = 0;
+	bi.biClrUsed = 0;
+	bi.biClrImportant = 0;
+
+	SelectObject(hwindowCompatibleDC, hbwindow);
+	// Copy from the window device context to the bitmap device context
+	// Use BitBlt to do a copy without any stretching -- the output is of the same dimensions as the target area.
+	BitBlt(hwindowCompatibleDC, 0, 0, captureArea.width, captureArea.height, hwindowDC, captureArea.x, captureArea.y, SRCCOPY);
+	// Copy into our own buffer as device-independent bitmap
+	GetDIBits(hwindowCompatibleDC, hbwindow, 0, captureArea.height, dest.data, (BITMAPINFO *)&bi, DIB_RGB_COLORS);
+
+	// Clean up memory to avoid leaks
+	DeleteObject(hbwindow);
+	DeleteDC(hwindowCompatibleDC);
+	ReleaseDC(targetWindow, hwindowDC);
 }
 
 void ScreenCapture::captureHwnd(HWND window, cv::Rect2d targetArea, cv::Mat& dest)
